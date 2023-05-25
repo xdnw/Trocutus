@@ -1,6 +1,9 @@
 package link.locutus.core.db.entities;
 
 import link.locutus.Trocutus;
+import link.locutus.util.MathMan;
+
+import java.util.Set;
 
 public class DBRealm {
     private final int id;
@@ -17,6 +20,15 @@ public class DBRealm {
             realm = new DBRealm(realmId, null);
         }
         return realm;
+    }
+
+    public static DBRealm parse(String input) {
+        if (MathMan.isInteger(input)) {
+            DBRealm aa = Trocutus.imp().getDB().getRealm(Integer.parseInt(input));
+            if (aa != null) return aa;
+        }
+        Set<DBRealm> matching = Trocutus.imp().getDB().getRealmMatching(f -> f.getName().equalsIgnoreCase(input));
+        return matching.isEmpty() ? null : matching.iterator().next();
     }
 
     public String getName() {

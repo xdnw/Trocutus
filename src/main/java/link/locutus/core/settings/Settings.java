@@ -49,7 +49,7 @@ public class Settings extends Config {
             "Found in the General Information section of the Discord Developer Portal"})
     public long APPLICATION_ID = 0;
 
-    @Comment("The discord user id of the admin user. (generated)")
+    @Comment("The discord user id of the admin user.")
     public long ADMIN_USER_ID = -1;
 
     @Comment("The nation name of the admin. (generated from login or api key)")
@@ -141,7 +141,7 @@ public class Settings extends Config {
             public boolean GUILD_MEMBERS = true;
             public boolean GUILD_PRESENCES = true;
             public boolean GUILD_MESSAGES = true;
-            public boolean GUILD_MESSAGE_REACTIONS = true;
+            public boolean GUILD_MESSAGE_REACTIONS = false;
             public boolean DIRECT_MESSAGES = true;
             public boolean EMOJI = false;
         }

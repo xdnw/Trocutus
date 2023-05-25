@@ -3,6 +3,9 @@ package link.locutus.core.db.entities;
 import link.locutus.Trocutus;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.settings.Settings;
+import link.locutus.util.MathMan;
+import link.locutus.util.StringMan;
+import net.dv8tion.jda.api.entities.Guild;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -43,6 +46,38 @@ public class DBAlliance {
         this.level = level;
         this.experience = experience;
         this.level_total = level_total;
+    }
+
+    public static DBAlliance parse(String input) {
+        if (MathMan.isInteger(input)) {
+            DBAlliance aa = Trocutus.imp().getDB().getAlliance(Integer.parseInt(input));
+            if (aa != null) return aa;
+        }
+        if (input.contains("/")) {
+            String[] split = input.split("/", 2);
+            DBRealm realm = DBRealm.parse(split[0]);
+            if (realm == null) return null;
+            Set<DBAlliance> matching = Trocutus.imp().getDB().getAllianceMatching(f -> f.realm_id == realm.getId() && f.getName().equalsIgnoreCase(split[1]));
+            if (matching.size() >= 1) return matching.iterator().next();
+        }
+        Set<DBAlliance> matching = Trocutus.imp().getDB().getAllianceMatching(f -> f.getName().equalsIgnoreCase(input));
+        return matching.isEmpty() ? null : matching.iterator().next();
+    }
+
+    public static Set<DBAlliance> parseList(Guild guild, String args) {
+        Set<DBAlliance> result = new LinkedHashSet<>();
+        for (String arg : StringMan.split(args, ',')) {
+            if (arg.equalsIgnoreCase("*")) {
+                result.addAll(Trocutus.imp().getDB().getAllianceMatching(f -> true));
+                continue;
+            }
+            DBAlliance alliance = DBAlliance.parse(arg);
+            if (alliance == null) {
+                throw new IllegalArgumentException("Could not find alliance: `" + arg + "`");
+            }
+            result.add(alliance);
+        }
+        return result;
     }
 
 

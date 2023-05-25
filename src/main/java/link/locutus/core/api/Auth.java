@@ -1,5 +1,6 @@
 package link.locutus.core.api;
 
+import link.locutus.Trocutus;
 import link.locutus.core.db.entities.DBKingdom;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.FileUtil;
@@ -18,35 +19,27 @@ import java.util.Map;
 public class Auth {
     private final String password;
     private final String username;
+    private final long userId;
     private CookieManager msCookieManager = new CookieManager();
 
     private boolean loggedIn = false;
 
-    public Auth(String username, String password) {
+    public Auth(long userId, String username, String password) {
+        this.userId = userId;
         // set fields
         this.username = username;
         this.password = password;
     }
 
-    public void test() throws IOException {
-        login(false);
-
-        String data = loadSelf();
-        System.out.println(data);
-    }
-
-    public String loadSelf() throws IOException {
-        String url = "https://trounced.net/dashboard";
-        String html = readStringFromURL(url, Collections.emptyMap(), false);
-        Document doc = Jsoup.parse(html);
-        String data = doc.getElementById("app").attr("data-page");
-        // html unescape
-        data = URLDecoder.decode(data);
-        return data;
+    public long getUserId() {
+        return userId;
     }
 
     public DBKingdom getKingdom(int realmId) {
-
+        for (DBKingdom kingdom : Trocutus.imp().getDB().getKingdomFromUser(getUserId())) {
+            if (kingdom.getRealm_id() == realmId) return kingdom;
+        }
+        return null;
     }
 
     public String readStringFromURL(String urlStr, Map<String, String> arguments, boolean post) throws IOException {
@@ -118,5 +111,18 @@ public class Auth {
 
     public CookieManager getCookieManager() {
         return msCookieManager;
+    }
+
+    public String sendMail(int sender_id, DBKingdom kingdom, String subject, String message) throws IOException {
+        String url = "https://trounced.net/mail";
+        Map<String, String> data = new HashMap<>();
+        data.put("kingdom_id", String.valueOf(sender_id));
+        data.put("destination", "kingdom");
+        data.put("destination_id", String.valueOf(kingdom.getId()));
+        data.put("subject", subject);
+        data.put("body", message);
+        String result = FileUtil.readStringFromURL(url, data, this.getCookieManager());
+        Document dom = Jsoup.parse(result);
+        return TrounceUtil.getAlert(dom);
     }
 }

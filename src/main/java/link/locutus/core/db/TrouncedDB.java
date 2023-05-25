@@ -56,7 +56,6 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class TrouncedDB extends DBMain {
-    private Map<Long, Integer> userToKingdom = new ConcurrentHashMap<>();
     private Map<Integer, Long> kingdomToUser = new ConcurrentHashMap<>();
 
     Map<Integer, DBKingdom> kingdoms = new ConcurrentHashMap<>();
@@ -209,7 +208,6 @@ public class TrouncedDB extends DBMain {
             while (rs.next()) {
                 long discordId = rs.getLong("discord_id");
                 int kingdomId = rs.getInt("kingdom_id");
-                userToKingdom.put(discordId, kingdomId);
                 kingdomToUser.put(kingdomId, discordId);
             }
         } catch (SQLException e) {
@@ -669,7 +667,7 @@ public class TrouncedDB extends DBMain {
         return result;
     }
 
-    public int getKingdomFromApiKey(String key) {
+    public Integer getKingdomFromApiKey(String key) {
         return getKingdomFromApiKey(key, true);
     }
     public Integer getKingdomFromApiKey(String key, boolean allowFetch) {
@@ -688,38 +686,54 @@ public class TrouncedDB extends DBMain {
             e.printStackTrace();
         }
         if (allowFetch) {
-//            try {
-//                Set<Api.Kingdom> data = new TrouncedApi(ApiKeyPool.builder().addKeyUnsafe(key).build()).fetchData();
-//                if (data.isEmpty()) {
-//                    System.out.println("Invalid api key " + key);
-//                    return null;
-//                }
-//                Api.Kingdom keyStats = data.iterator().next();
-//                String name = keyStats.name;
-//
-//
-//                DBKingdom fetched = updateKingdom(keyStats);
-//                addApiKey(fetched.getId(), key);
-//                return fetched.getId();
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//            }
+            try {
+                Set<Api.Kingdom> data = new TrouncedApi(ApiKeyPool.builder().addKeyUnsafe(key).build()).fetchData();
+                if (data.isEmpty()) {
+                    System.out.println("Invalid api key " + key);
+                    return null;
+                }
+                Api.Kingdom keyStats = data.iterator().next();
+                String name = keyStats.name;
+
+                Set<DBKingdom> matching = getKingdomsMatching(f -> f.getName().equalsIgnoreCase(name) && f.getSlug().equalsIgnoreCase(keyStats.slug) && f.getAlliance_id() == keyStats.alliance.id);
+                if (matching.size() > 1) throw new IllegalArgumentException("Multiple kingdoms with name " + name);
+                if (matching.size() == 1) {
+                    DBKingdom kingdom = matching.iterator().next();
+                    addApiKey(kingdom.getId(), key);
+                    return kingdom.getId();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
         return null;
+    }
+
+    public void addApiKey(int kingdom_id, String key) {
+            try (PreparedStatement stmt = prepareQuery("INSERT OR IGNORE INTO API_KEYS (kingdom_id, api_key) VALUES (?, ?)")) {
+            stmt.setInt(1, kingdom_id);
+            stmt.setString(2, key);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public Long getUserIdFromKingdomId(int kingdom) {
         return kingdomToUser.get(kingdom);
     }
 
-    public Integer getKingdomIdFromUserId(long userId) {
-        return userToKingdom.get(userId);
-    }
-
-    public DBKingdom getKingdomFromUser(long owner) {
-        Integer kingdomId = userToKingdom.get(owner);
-        if (kingdomId == null) return null;
-        return kingdoms.get(kingdomId);
+    public Set<DBKingdom> getKingdomFromUser(long owner) {
+        Set<DBKingdom> results = new LinkedHashSet<>();
+        for (Map.Entry<Integer, Long> entry : kingdomToUser.entrySet()) {
+            if (entry.getValue() == owner) {
+                DBKingdom kingdom = kingdoms.get(entry.getKey());
+                if (kingdom != null) {
+                    results.add(kingdom);
+                }
+            }
+        }
+        return results;
     }
 
     public DBAlliance getAlliance(int aaId) {
@@ -953,8 +967,8 @@ public class TrouncedDB extends DBMain {
         return kingdoms.values().stream().filter(predicate).collect(Collectors.toSet());
     }
 
-    public DBAlliance getAllianceMatching(Predicate<DBAlliance> predicate) {
-        return alliances.values().stream().filter(predicate).findFirst().orElse(null);
+    public Set<DBAlliance> getAllianceMatching(Predicate<DBAlliance> predicate) {
+        return alliances.values().stream().filter(predicate).collect(Collectors.toSet());
     }
 
     public void deleteKingdoms(Set<DBKingdom> kingdoms) {
@@ -992,5 +1006,20 @@ public class TrouncedDB extends DBMain {
         String query = "DELETE FROM REALMS WHERE id = ?";
         update(query, (ThrowingConsumer<PreparedStatement>) (stmt) -> stmt.setInt(1, realm.getId()));
         Trocutus.imp().runEvent(new RealmDeleteEvent(realm));
+    }
+
+    public void saveUser(long userId, DBKingdom kingdom) {
+        Long existing = kingdomToUser.put(kingdom.getId(), userId);
+        if (existing != null && existing.longValue() == userId) return;
+        // save
+        String query = "INSERT OR REPLACE INTO USERS (discord_id, kingdom_id) VALUES (?, ?)";
+        update(query, (ThrowingConsumer<PreparedStatement>) (stmt) -> {
+            stmt.setLong(1, userId);
+            stmt.setInt(2, kingdom.getId());
+        });
+    }
+
+    public Set<DBRealm> getRealmMatching(Predicate<DBRealm> realmPredicate) {
+        return realms.values().stream().filter(realmPredicate).collect(Collectors.toSet());
     }
 }

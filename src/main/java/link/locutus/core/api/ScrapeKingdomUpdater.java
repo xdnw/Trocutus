@@ -132,6 +132,7 @@ public class ScrapeKingdomUpdater {
             makeCopy.accept(existing.getId(), existing.copy());
         }
         {
+            System.out.println("updating kingdom " + pojo.name + " | " + kingdom);
             modified |= existing.setName(pojo.name);
             modified |= existing.setSlug(pojo.slug);
             modified |= existing.setAlliance_id(pojo.alliance_id);
@@ -139,7 +140,9 @@ public class ScrapeKingdomUpdater {
                 Rank rank = Rank.parse(pojo.alliance_permissions);
                 modified |= existing.setAlliance_permissions(rank);
             }
-            modified |= existing.setTotal_land(Integer.parseInt(pojo.total_land));
+            if (pojo.total_land != null && !pojo.total_land.isEmpty()) {
+                modified |= existing.setTotal_land(Integer.parseInt(pojo.total_land));
+            }
             modified |= existing.setAlert_level(pojo.alert_level);
             modified |= existing.setResource_level(pojo.resource_level);
             modified |= existing.setSpell_alert(pojo.spell_alert);
@@ -343,13 +346,14 @@ public class ScrapeKingdomUpdater {
                         DBAlliance aa = kingdom.getAlliance();
                         if (aa != null && aa.getTag() != null && !aa.getTag().isEmpty() && !aa.getTag().equals(allianceTag)) {
                             String allianceTagFinal = allianceTag;
-                            DBAlliance aaByTag = db.getAllianceMatching(f -> f.getRealm_id() == realmId && allianceTagFinal.equalsIgnoreCase(f.getTag()));
-                            if (aaByTag != null && aaByTag.getId() != kingdom.getAlliance_id()) {
-                                if (!original.containsKey(id)) original.put(id, kingdom.copy());
-
-                                kingdom.setAlliance_id(aaByTag.getId());
-                                toSave.add(kingdom);
-                                updatedFlag.accept(kingdom, name);
+                            Set<DBAlliance> aaByTag = db.getAllianceMatching(f -> f.getRealm_id() == realmId && allianceTagFinal.equalsIgnoreCase(f.getTag()));
+                            if (aaByTag != null && aaByTag.size() == 1) {
+                                DBAlliance aaOther = aaByTag.iterator().next();
+                                if (aaOther.getId() != kingdom.getAlliance_id()) {
+                                    kingdom.setAlliance_id(aaOther.getId());
+                                    toSave.add(kingdom);
+                                    updatedFlag.accept(kingdom, name);
+                                }
                             }
                         }
                     } else if (allianceTag == null && kingdom.getAlliance_id() != 0) {
@@ -397,14 +401,16 @@ public class ScrapeKingdomUpdater {
         db.updateTreaties(realmId, treaties);
     }
 
-    public void updateSelf() throws IOException {
+    public Set<DBKingdom> updateSelf() throws IOException {
+        Set<DBKingdom> result = new HashSet<>();
+
         String url = "https://trounced.net/dashboard";
         JSONObject json = getJson(url);
 
         JSONObject props = json.getJSONObject("props");
 
         JSONArray realms = props.getJSONArray("realms");
-        Map<Integer, DBRealm> allRealms = db.getRealms();
+        Map<Integer, DBRealm> allRealms = new HashMap<>(db.getRealms());
         // iterate
         for (int i = 0; i < realms.length(); i++) {
             JSONObject realmJson = realms.getJSONObject(i);
@@ -426,11 +432,15 @@ public class ScrapeKingdomUpdater {
         // iterate
         for (int i = 0; i < kingdoms.length(); i++) {
             JSONObject kingdomJson = kingdoms.getJSONObject(i);
-            updateSelf(kingdomJson);
+            DBKingdom kingdom = updateSelf(kingdomJson);
+            if (kingdom != null) {
+                result.add(kingdom);
+            }
         }
+        return result;
     }
 
-    public void updateSelf(JSONObject self) throws JsonProcessingException {
+    public DBKingdom updateSelf(JSONObject self) throws JsonProcessingException {
         AtomicBoolean updateFlag = new AtomicBoolean();
         Map<Integer, DBKingdom> copyMap = new HashMap<>();
         DBKingdom existing = toKingdom(self, (id, copy) -> copyMap.put(id, copy), updateFlag);
@@ -442,5 +452,7 @@ public class ScrapeKingdomUpdater {
         // map to Dashboard.Kingdom with mapper
         Dashboard.Kingdom kingdom = mapper.readValue(self.toString(), Dashboard.Kingdom.class);
         // todo extra?
+
+        return existing;
     }
 }

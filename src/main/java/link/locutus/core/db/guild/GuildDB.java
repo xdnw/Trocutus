@@ -17,6 +17,7 @@ import net.dv8tion.jda.api.entities.Role;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,7 +57,40 @@ public class GuildDB extends DBMain {
         super("guilds/" + guild.getId());
         this.guild = guild;
         this.roleToAccountToDiscord  = new ConcurrentHashMap<>();
+    }
 
+    @Override
+    protected void createTables() {
+        {
+            String create = "CREATE TABLE IF NOT EXISTS `ROLES2` (`role` BIGINT NOT NULL, `alias` BIGINT NOT NULL, `alliance` BIGINT NOT NULL)";
+            try (Statement stmt = getConnection().createStatement()) {
+                stmt.addBatch(create);
+                stmt.executeBatch();
+                stmt.clearBatch();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        };
+        {
+            String create = "CREATE TABLE IF NOT EXISTS `COALITIONS` (`alliance_id` BIGINT NOT NULL, `coalition` VARCHAR NOT NULL, PRIMARY KEY(alliance_id, coalition))";
+            try (Statement stmt = getConnection().createStatement()) {
+                stmt.addBatch(create);
+                stmt.executeBatch();
+                stmt.clearBatch();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        };
+        {
+            String create = "CREATE TABLE IF NOT EXISTS `INFO` (`key` VARCHAR NOT NULL PRIMARY KEY, `value` VARCHAR NOT NULL)";
+            try (Statement stmt = getConnection().createStatement()) {
+                stmt.addBatch(create);
+                stmt.executeBatch();
+                stmt.clearBatch();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        };
     }
 
     public Guild getGuild() {

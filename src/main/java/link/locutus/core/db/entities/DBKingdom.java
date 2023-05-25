@@ -3,11 +3,15 @@ package link.locutus.core.db.entities;
 import link.locutus.Trocutus;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
+import link.locutus.util.MathMan;
+import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.User;
 
 import java.math.BigInteger;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -22,16 +26,48 @@ public class DBKingdom {
     }
 
     public static Map<DBRealm, DBKingdom> getFromUser(User user) {
-        return null;
+        Set<DBKingdom> kingdoms = Trocutus.imp().getDB().getKingdomFromUser(user.getIdLong());
+        Map<DBRealm, DBKingdom> byRealm = new LinkedHashMap<>();
+        for (DBKingdom kingdom : kingdoms) {
+            byRealm.put(kingdom.getRealm(), kingdom);
+        }
+        return byRealm;
     }
-    public static DBKingdom parse(String arg) {
-        return null;
+
+    public static DBKingdom parse(String input) {
+        if (MathMan.isInteger(input)) {
+            DBKingdom aa = Trocutus.imp().getDB().getKingdom(Integer.parseInt(input));
+            if (aa != null) return aa;
+        }
+        if (input.contains("/")) {
+            String[] split = input.split("/", 2);
+            DBRealm realm = DBRealm.parse(split[0]);
+            if (realm == null) return null;
+            Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.realm_id == realm.getId() && f.getName().equalsIgnoreCase(split[1]));
+            if (matching.size() >= 1) return matching.iterator().next();
+        }
+        Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.getName().equalsIgnoreCase(input));
+        return matching.isEmpty() ? null : matching.iterator().next();
+
     }
     public static DBKingdom get(int id) {
-        return null;
+        return Trocutus.imp().getDB().getKingdom(id);
     }
-    public static Set<DBKingdom> parseList(Guild guild, String arg) {
-        return null;
+
+    public static Set<DBKingdom> parseList(Guild guild, String args) {
+        Set<DBKingdom> result = new LinkedHashSet<>();
+        for (String arg : StringMan.split(args, ',')) {
+            if (arg.equalsIgnoreCase("*")) {
+                result.addAll(Trocutus.imp().getDB().getKingdomsMatching(f -> true));
+                continue;
+            }
+            DBKingdom kingdom = DBKingdom.parse(arg);
+            if (kingdom == null) {
+                throw new IllegalArgumentException("Could not find kingdom: `" + arg + "`");
+            }
+            result.add(kingdom);
+        }
+        return result;
     }
 
     private final int id;

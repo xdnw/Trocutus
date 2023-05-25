@@ -20,6 +20,7 @@ import link.locutus.util.RateLimitUtil;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.Compression;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
@@ -39,13 +40,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.logging.Logger;
 
-public class Trocutus {
+public class Trocutus extends ListenerAdapter {
     private final ExecutorService executor;
     private final ScheduledThreadPoolExecutor scheduler;
     private final TrouncedApi apiPool;
     private final TrouncedApi rootApi;
-    private final Auth rootAuth;
-    private final ScrapeKingdomUpdater scraper;
+    private Auth rootAuth;
+    private ScrapeKingdomUpdater scraper;
     private TrouncedSlash slashCommands;
     private final Map<Long, GuildDB> guildDatabases = new ConcurrentHashMap<>();
     private Guild server;
@@ -53,25 +54,8 @@ public class Trocutus {
     public static void main(String[] args) throws SQLException, InterruptedException, IOException {
         Settings.INSTANCE.reload(Settings.INSTANCE.getDefaultFile());
 
-        TrouncedApi api = new TrouncedApi(ApiKeyPool.builder().addKeyUnsafe(Settings.INSTANCE.API_KEY_PRIMARY).build());
-        for (Api.Kingdom kingdom : api.fetchData()) {
-            System.out.println("\n\n - - - - - - \n\n");
-            System.out.println(kingdom.name);
-        }
-        System.out.println();
-
-        Auth auth = new Auth(Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
-        String result = auth.readStringFromURL("https://trounced.net/kingdom/locutus/search/khazuland", new HashMap<>(), false);
-        System.out.println(result);
-        TrouncedDB db = new TrouncedDB();
-        ScrapeKingdomUpdater update = new ScrapeKingdomUpdater(auth, db);
-//        update.updateAlliances();
-//        auth.test();
-
-        System.out.println("Auth " + auth);
-
-        // load settings
-//        Trocutus instance = new Trocutus().start();
+        Trocutus instance = new Trocutus();
+        instance.start();
         Settings.INSTANCE.save(Settings.INSTANCE.getDefaultFile());
     }
 
@@ -110,29 +94,31 @@ public class Trocutus {
         if (Settings.INSTANCE.USERNAME.isEmpty() || Settings.INSTANCE.PASSWORD.isEmpty()) {
             throw new IllegalStateException("Please set USERNAME/PASSWORD in " + Settings.INSTANCE.getDefaultFile());
         }
-        this.rootAuth = new Auth(Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
-        this.scraper = new ScrapeKingdomUpdater(this.rootAuth, this.rootDb);
-        this.scraper.updateSelf();
-
-        Settings.INSTANCE.NATION_ID = -1;
-        Integer nationNameFromKey = rootDb.getKingdomFromApiKey(Settings.INSTANCE.API_KEY_PRIMARY);
-        if (nationNameFromKey == null) {
-            throw new IllegalStateException("Could not get NATION_NAME from key. Please ensure a valid API_KEY is set in " + Settings.INSTANCE.getDefaultFile());
-        }
-        Settings.INSTANCE.NATION_ID = nationNameFromKey;
-
-        {
-            Long adminId = rootDb.getUserIdFromKingdomId(Settings.INSTANCE.NATION_ID);
-            if (adminId != null) {
-                Settings.INSTANCE.ADMIN_USER_ID = adminId;
-            }
-        }
 
         List<String> pool = new ArrayList<>();
         pool.addAll(Settings.INSTANCE.API_KEY_POOL);
         if (pool.isEmpty()) {
             pool.add(Settings.INSTANCE.API_KEY_PRIMARY);
         }
+
+        if (Settings.INSTANCE.ADMIN_USER_ID <= 0) {
+            throw new IllegalStateException("Please set ADMIN_USER_ID in " + Settings.INSTANCE.getDefaultFile());
+        }
+
+        this.rootAuth = new Auth(Settings.INSTANCE.ADMIN_USER_ID, Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
+        this.scraper = new ScrapeKingdomUpdater(this.rootAuth, this.rootDb);
+        for (DBKingdom kingdom : this.scraper.updateSelf()) {
+            if (Settings.INSTANCE.ADMIN_USER_ID > 0) {
+                rootDb.saveUser(Settings.INSTANCE.ADMIN_USER_ID, kingdom);
+            }
+        }
+
+        Settings.INSTANCE.NATION_ID = -1;
+        Integer nationNameFromKey = rootDb.getKingdomFromApiKey(Settings.INSTANCE.API_KEY_PRIMARY);
+        if (nationNameFromKey == null) {
+            throw new IllegalStateException("Could not get NATION_ID from key. Please ensure a valid API_KEY is set in " + Settings.INSTANCE.getDefaultFile());
+        }
+        Settings.INSTANCE.NATION_ID = nationNameFromKey;
 
         this.apiPool = new TrouncedApi(ApiKeyPool.builder().addKeys(pool).build());
         this.rootApi = new TrouncedApi(ApiKeyPool.builder().addKeyUnsafe(Settings.INSTANCE.API_KEY_PRIMARY).build());
@@ -152,13 +138,13 @@ public class Trocutus {
 
     public void start() throws InterruptedException {
         if (Settings.INSTANCE.ENABLED_COMPONENTS.DISCORD_BOT) {
-            JDABuilder builder = JDABuilder.createLight(Settings.INSTANCE.BOT_TOKEN, GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_MESSAGES, GatewayIntent.GUILD_MESSAGE_REACTIONS, GatewayIntent.DIRECT_MESSAGES);
+            JDABuilder builder = JDABuilder.createLight(Settings.INSTANCE.BOT_TOKEN, GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT, GatewayIntent.DIRECT_MESSAGES);
             if (Settings.INSTANCE.ENABLED_COMPONENTS.SLASH_COMMANDS) {
                 this.slashCommands = new TrouncedSlash(this);
                 builder.addEventListeners(slashCommands);
             }
             if (Settings.INSTANCE.ENABLED_COMPONENTS.MESSAGE_COMMANDS) {
-                builder.addEventListeners(this);
+                builder.addEventListeners(commandManager);
             }
             builder
                     .setBulkDeleteSplittingEnabled(true)
@@ -239,9 +225,9 @@ public class Trocutus {
                     Guild guild = value.getGuild();
                     if (!guild.isLoaded()) continue;
                     long owner = guild.getOwnerIdLong();
-                    DBKingdom kingdom = rootDb.getKingdomFromUser(owner);
-                    if (kingdom != null) {
-                        if (Settings.INSTANCE.MODERATION.BANNED_ALLIANCES.contains(kingdom.getAllianceName())) {
+                    Set<DBKingdom> kingdoms = rootDb.getKingdomFromUser(owner);
+                    for (DBKingdom kingdom : kingdoms) {
+                        if (Settings.INSTANCE.MODERATION.BANNED_ALLIANCES.contains(kingdom.getAlliance_id())) {
                             RateLimitUtil.queue(guild.leave());
                         }
                     }
@@ -302,7 +288,7 @@ public class Trocutus {
         return executor;
     }
 
-    public ScheduledExecutorService getScheduler() {
+    public ScheduledThreadPoolExecutor getScheduler() {
         return scheduler;
     }
 

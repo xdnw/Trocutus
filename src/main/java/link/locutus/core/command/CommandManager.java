@@ -1,5 +1,6 @@
 package link.locutus.core.command;
 
+import com.google.gson.reflect.TypeToken;
 import link.locutus.Trocutus;
 import link.locutus.command.binding.Key;
 import link.locutus.command.binding.LocalValueStore;
@@ -17,10 +18,12 @@ import link.locutus.command.command.CommandUsageException;
 import link.locutus.command.command.IMessageIO;
 import link.locutus.command.command.ParameterData;
 import link.locutus.command.command.ParametricCallable;
+import link.locutus.command.impl.discord.DiscordChannelIO;
 import link.locutus.command.impl.discord.binding.DiscordBindings;
 import link.locutus.command.impl.discord.binding.PermissionBinding;
 import link.locutus.command.impl.discord.binding.SheetBindings;
 import link.locutus.command.perm.PermissionHandler;
+import link.locutus.core.command.binding.TrouncedBindings;
 import link.locutus.core.db.entities.DBAlliance;
 import link.locutus.core.db.entities.DBKingdom;
 import link.locutus.core.db.entities.DBRealm;
@@ -28,12 +31,16 @@ import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.key.GuildSetting;
 import link.locutus.core.settings.Settings;
+import link.locutus.util.DiscordUtil;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 
 import javax.annotation.Nullable;
@@ -53,7 +60,7 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class CommandManager {
+public class CommandManager extends ListenerAdapter {
     private final CommandGroup commands;
     private final ValueStore<Object> store;
     private final ValidatorStore validators;
@@ -63,6 +70,7 @@ public class CommandManager {
         new PrimitiveBindings().register(store);
         new DiscordBindings().register(store);
         new SheetBindings().register(store);
+        new TrouncedBindings().register(store);
 
         this.validators = new ValidatorStore();
         new PrimitiveValidators().register(validators);
@@ -71,6 +79,75 @@ public class CommandManager {
         new PermissionBinding().register(permisser);
 
         this.commands = CommandGroup.createRoot(store, validators);
+    }
+
+    public CommandManager registerCommands() {
+        this.commands.registerMethod(new BasicCommands(), List.of(), "me", "me");
+        this.commands.registerMethod(new BasicCommands(), List.of("mail"), "mail", "send");
+        registerSettings();
+        return this;
+    }
+
+    @Override
+    public void onMessageReceived(@NotNull MessageReceivedEvent event) {
+        try {
+            Guild guild = event.isFromGuild() ? event.getGuild() : null;
+            if (guild != null) {
+                GuildDB db = Trocutus.imp().getGuildDB(guild);
+                if (db != null && !db.getHandler().onMessageReceived(event)) {
+                    return;
+                }
+            }
+
+            long start = System.currentTimeMillis();
+            User msgUser = event.getAuthor();
+            if (msgUser.isSystem() || msgUser.isBot()) {
+                return;
+            }
+
+            Message message = event.getMessage();
+            String content = DiscordUtil.trimContent(message.getContentRaw());
+            if (content.length() == 0) {
+                return;
+            }
+
+            if (content.equalsIgnoreCase(Settings.INSTANCE.DISCORD.COMMAND.COMMAND_PREFIX + "threads")) {
+                threadDump();
+                return ;
+            }
+
+            run(event, true);
+            long diff = System.currentTimeMillis() - start;
+            if (diff > 1000) {
+                StringBuilder response = new StringBuilder("## Long action: " + event.getAuthor().getIdLong() + " | " + event.getAuthor().getName() + ": " + DiscordUtil.trimContent(event.getMessage().getContentRaw()));
+                if (event.isFromGuild()) {
+                    response.append("\n\n- " + event.getGuild().getName() + " | " + event.getGuild().getId());
+                }
+                new RuntimeException(response.toString()).printStackTrace();
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void run(MessageReceivedEvent event, boolean async) {
+        Guild guild = event.isFromGuild() ? event.getGuild() : event.getMessage().isFromGuild() ? event.getMessage().getGuild() : null;
+        DiscordChannelIO io = new DiscordChannelIO(event.getChannel(), event::getMessage);
+        User user = event.getAuthor();
+        String fullCmdStr = DiscordUtil.trimContent(event.getMessage().getContentRaw()).trim();
+        if (fullCmdStr.startsWith(Settings.INSTANCE.DISCORD.COMMAND.COMMAND_PREFIX)) {
+            fullCmdStr = fullCmdStr.substring(Settings.INSTANCE.DISCORD.COMMAND.COMMAND_PREFIX.length());
+        }
+        run(guild, event.getChannel(), user, event.getMessage(), io, fullCmdStr, async);
+    }
+
+    private void threadDump() {
+        Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+        for (Thread thread : threadSet) {
+            System.err.println(Arrays.toString(thread.getStackTrace()));
+        }
+        System.err.print("\n\nQueue: " + Trocutus.imp().getScheduler().getQueue().size() + " | Active: " + Trocutus.imp().getScheduler().getActiveCount() + " | task count: " + Trocutus.imp().getScheduler().getTaskCount());
+        Trocutus.imp().getScheduler().submit(() -> System.err.println("- COMMAND EXECUTOR RAN SUCCESSFULLY!!!"));
     }
 
     public static Map<String, String> parseArguments(Set<String> params, String input, boolean checkUnbound) {
@@ -164,7 +241,7 @@ public class CommandManager {
             if (Settings.INSTANCE.MODERATION.BANNED_USERS.contains(user.getIdLong()))
                 throw new IllegalArgumentException("Unsupported");
             Map<DBRealm, DBKingdom> kingdoms = DBKingdom.getFromUser(user);
-            if (kingdoms != null && !kingdoms.isEmpty()) {
+            if (!kingdoms.isEmpty()) {
                 for (DBKingdom kingdom : kingdoms.values()) {
                     if (Settings.INSTANCE.MODERATION.BANNED_NATIONS.contains(kingdom.getId())) {
                         throw new IllegalArgumentException("MODERATION.BANNED_NATIONS: " + kingdom.getId() + " | " + kingdom.getName());
@@ -173,6 +250,7 @@ public class CommandManager {
                         throw new IllegalArgumentException("MODERATION.BANNED_ALLIANCES: " + kingdom.getAlliance_id() + " | " + kingdom.getAllianceName());
                     }
                 }
+                locals.addProvider(Key.of(TypeToken.getParameterized(Map.class, DBRealm.class, DBKingdom.class).getType(), Me.class), kingdoms);
             }
             locals.addProvider(Key.of(User.class, Me.class), user);
         }
@@ -348,11 +426,6 @@ public class CommandManager {
                 throw new UnsupportedOperationException("Invalid command class " + next.getClass());
             }
         }
-    }
-
-    public CommandManager registerCommands() {
-        registerSettings();
-        return this;
     }
 
     private void registerSettings() {

@@ -1,4 +1,6 @@
 package link.locutus.command.impl.discord;
 
-public class SlashCommandManager {
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
+
+public class SlashCommandManager extends ListenerAdapter {
 }
