@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Date;
 
 public class AlliancePage {
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Hero{
         public String name;
         public int level;

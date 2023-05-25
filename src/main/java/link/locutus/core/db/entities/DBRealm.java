@@ -4,6 +4,7 @@ import link.locutus.Trocutus;
 import link.locutus.util.MathMan;
 
 import java.util.Set;
+import java.util.function.Predicate;
 
 public class DBRealm {
     private final int id;
@@ -50,5 +51,9 @@ public class DBRealm {
     @Override
     public int hashCode() {
         return getId();
+    }
+
+    public Set<DBKingdom> getKindoms(Predicate<DBKingdom> predicate) {
+        return Trocutus.imp().getDB().getKingdomsMatching(f -> f.getRealm_id() == id && predicate.test(f));
     }
 }

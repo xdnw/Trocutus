@@ -24,21 +24,20 @@ import link.locutus.core.event.alliance.AllianceCreateEvent;
 import link.locutus.core.event.alliance.AllianceDeleteEvent;
 import link.locutus.core.event.alliance.AllianceUpdateEvent;
 import link.locutus.core.event.Event;
-import link.locutus.core.event.interaction.AttackCreateEvent;
-import link.locutus.core.event.interaction.SpyCreateEvent;
+import link.locutus.core.event.attack.AttackCreateEvent;
 import link.locutus.core.event.kingdom.KingdomCreateEvent;
 import link.locutus.core.event.kingdom.KingdomDeleteEvent;
 import link.locutus.core.event.kingdom.KingdomUpdateEvent;
 import link.locutus.core.event.realm.RealmCreateEvent;
 import link.locutus.core.event.realm.RealmDeleteEvent;
 import link.locutus.core.event.realm.RealmUpdateEvent;
+import link.locutus.core.event.spy.SpyCreateEvent;
 import link.locutus.core.event.treaty.TreatyCancelEvent;
 import link.locutus.core.event.treaty.TreatyCreateEvent;
 import link.locutus.core.event.treaty.TreatyUpdateEvent;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.scheduler.ThrowingBiConsumer;
 import link.locutus.util.scheduler.ThrowingConsumer;
-import org.sqlite.core.DB;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -65,7 +64,7 @@ public class TrouncedDB extends DBMain {
 
     private Map<Integer, DBAttack> allAttacks = new Int2ObjectOpenHashMap<>();
 
-    private Map<Integer, DBSpy> allySpies = new Int2ObjectOpenHashMap<>();
+    private Map<Integer, DBSpy> allSpies = new Int2ObjectOpenHashMap<>();
 
     private Set<Integer> unknownInteractionIds = new IntArraySet();
 
@@ -179,12 +178,13 @@ public class TrouncedDB extends DBMain {
                 int defenderId = rs.getInt("defender_id");
                 long date = rs.getLong("date");
 
-                DBSpy spy = new DBSpy(id, attackerAa, attackerId, protectedGold, goldLoot, attack, defense, soldiers, cavalry, archers, elites, defenderAa, defenderId, date);
-                allySpies.put(id, spy);
+                DBSpy spy = new DBSpy(id, attackerId, attackerAa, protectedGold, goldLoot, attack, defense, soldiers, cavalry, archers, elites, defenderId, defenderAa, date);
+                allSpies.put(id, spy);
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+        System.out.println("Spies " + allSpies.size());
     }
 
     public void loadUnkownIds() {
@@ -595,7 +595,7 @@ public class TrouncedDB extends DBMain {
         Set<Event> events = new HashSet<>();
         List<DBSpy> toSaveFinal = new ArrayList<>();
         for (DBSpy spy : toSave) {
-            DBSpy existing = allySpies.put(spy.id, spy);
+            DBSpy existing = allSpies.put(spy.id, spy);
             if (existing != null) continue;
 
             toSaveFinal.add(spy);
@@ -605,7 +605,7 @@ public class TrouncedDB extends DBMain {
                 "attacker_id, " +
                 "attacker_aa, " +
                 "protected_gold, " +
-                "gold, " +
+                "gold_loot, " +
                 "attack, " +
                 "defense, " +
                 "soldiers, " +
@@ -765,7 +765,7 @@ public class TrouncedDB extends DBMain {
         }
     };
 
-    public int[] saveAlliances(int realm_id, Map<Integer, DBAlliance> original, List<DBAlliance> toSave, boolean deleteMissing) {
+    public int[] saveAlliances(int realm_id, Set<Integer> allIds, Map<Integer, DBAlliance> original, List<DBAlliance> toSave, boolean deleteMissing) {
         if (toSave.isEmpty()) return new int[0];
         Set<Event> events = new HashSet<>();
         if (deleteMissing) {
@@ -774,7 +774,7 @@ public class TrouncedDB extends DBMain {
             for (Map.Entry<Integer, DBAlliance> entry : alliances.entrySet()) {
                 DBAlliance alliance = entry.getValue();
                 if (alliance.getRealm_id() != realm_id) continue;
-                if (!toUpdate.contains(entry.getKey())) {
+                if (!toUpdate.contains(entry.getKey()) && !allIds.contains(entry.getKey())) {
                     events.add(new AllianceDeleteEvent(alliance));
                     toDelete.add(entry.getKey());
                 }
@@ -1021,5 +1021,35 @@ public class TrouncedDB extends DBMain {
 
     public Set<DBRealm> getRealmMatching(Predicate<DBRealm> realmPredicate) {
         return realms.values().stream().filter(realmPredicate).collect(Collectors.toSet());
+    }
+
+    public DBSpy getLatestSpy(int id) {
+        DBSpy latest = null;
+        for (DBSpy spy : allSpies.values()) {
+            if (spy.defender_id == id && (latest == null || spy.id > latest.id)) {
+                latest = spy;
+            }
+        }
+        return latest;
+    }
+
+    public DBAttack getLatestDefensive(int id) {
+        DBAttack latest = null;
+        for (DBAttack spy : allAttacks.values()) {
+            if (spy.defender_id == id && (latest == null || spy.id > latest.id)) {
+                latest = spy;
+            }
+        }
+        return latest;
+    }
+
+    public DBAttack getLatestOffensive(int id) {
+        DBAttack latest = null;
+        for (DBAttack spy : allAttacks.values()) {
+            if (spy.attacker_id == id && (latest == null || spy.id > latest.id)) {
+                latest = spy;
+            }
+        }
+        return latest;
     }
 }

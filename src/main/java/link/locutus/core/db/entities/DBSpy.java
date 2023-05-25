@@ -38,7 +38,7 @@ public class DBSpy {
     public DBSpy(SpyInteraction.Spy pojo) {
         this.id = pojo.id;
         this.attacker_id = pojo.attacker.id;
-        this.attacker_aa = pojo.attacker_alliance.id;
+        this.attacker_aa = pojo.attacker_alliance == null ? 0 : pojo.attacker_alliance.id;
         this.protectedGold = pojo.data.protectedGold;
         this.gold = pojo.data.gold;
         this.attack = pojo.data.attack;
@@ -48,7 +48,31 @@ public class DBSpy {
         this.archers = pojo.data.archers;
         this.elites = pojo.data.elites;
         this.defender_id = pojo.defender.id;
-        this.defender_aa = pojo.defender_alliance.id;
+        this.defender_aa = pojo.defender_alliance == null ? 0 : pojo.defender_alliance.id;
         this.date = pojo.created_at.getTime();
+    }
+
+    public DBKingdom getAttacker() {
+        return DBKingdom.get(attacker_id);
+    }
+
+    public DBKingdom getDefender() {
+        return DBKingdom.get(defender_id);
+    }
+
+
+    private final static String soldierChar = "\uD83D\uDC82\u200D\uFE0F";
+    private final static String archerChar = "\uD83C\uDFF9";
+    private final static String cavalryChar = "\uD83C\uDFC7";
+    private final static String eliteChar = "\uD83E\uDDD9\u200D\uFE0F";
+
+
+    public String getUnitMarkdown() {
+        StringBuilder body = new StringBuilder();
+        body.append(String.format("%6s", soldiers)).append(" " + soldierChar).append(" | ")
+                .append(String.format("%5s", cavalry)).append(" " + archerChar).append(" | ")
+                .append(String.format("%5s", archers)).append(" " + cavalryChar).append(" | ")
+                .append(String.format("%4s", elites)).append(" " + eliteChar);
+        return body.toString();
     }
 }

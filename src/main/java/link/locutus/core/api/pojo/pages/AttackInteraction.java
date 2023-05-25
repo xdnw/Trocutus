@@ -1,5 +1,7 @@
 package link.locutus.core.api.pojo.pages;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.Date;
 
 public class AttackInteraction {
@@ -52,6 +54,7 @@ public class AttackInteraction {
         public int elites;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Attack {
         public int id;
         public String type;

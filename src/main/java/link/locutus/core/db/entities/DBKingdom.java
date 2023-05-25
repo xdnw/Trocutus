@@ -125,7 +125,9 @@ public class DBKingdom {
     }
 
     public String getAllianceName() {
-        return null;
+        DBAlliance aa = getAlliance();
+        if (aa == null) return "None";
+        return aa.getName();
     }
 
     public String getName() {
@@ -144,6 +146,10 @@ public class DBKingdom {
     }
 
     public User getUser() {
+        Long user = Trocutus.imp().getDB().getUserIdFromKingdomId(id);
+        if (user != null) {
+            return Trocutus.imp().getDiscordApi().getUserById(user);
+        }
         return null;
     }
 
@@ -306,5 +312,21 @@ public class DBKingdom {
     @Override
     public int hashCode() {
         return id;
+    }
+
+    public String getUrl(String myName) {
+        return "https://trounced.net/kingdom/" + myName + "/search/" + slug;
+    }
+
+    public DBSpy getLatestSpyReport() {
+        return Trocutus.imp().getDB().getLatestSpy(id);
+    }
+
+    public DBAttack getLatestOffensive() {
+        return Trocutus.imp().getDB().getLatestOffensive(id);
+    }
+
+    public DBAttack getLatestDefensive() {
+        return Trocutus.imp().getDB().getLatestDefensive(id);
     }
 }

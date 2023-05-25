@@ -2,17 +2,23 @@ package link.locutus.core.api;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import link.locutus.Trocutus;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.TreatyType;
 import link.locutus.core.api.pojo.pages.AllianceDirectory;
 import link.locutus.core.api.pojo.pages.AlliancePage;
+import link.locutus.core.api.pojo.pages.AttackInteraction;
 import link.locutus.core.api.pojo.pages.Dashboard;
+import link.locutus.core.api.pojo.pages.SpyInteraction;
 import link.locutus.core.db.TrouncedDB;
 import link.locutus.core.db.entities.DBAlliance;
+import link.locutus.core.db.entities.DBAttack;
 import link.locutus.core.db.entities.DBKingdom;
 import link.locutus.core.db.entities.DBRealm;
+import link.locutus.core.db.entities.DBSpy;
 import link.locutus.core.db.entities.DBTreaty;
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
@@ -21,15 +27,20 @@ import org.jsoup.nodes.Element;
 
 import java.io.IOException;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -43,6 +54,60 @@ public class ScrapeKingdomUpdater {
         this.auth = auth;
         this.mapper = new ObjectMapper();
         this.db = db;
+
+        // update alliances
+        Trocutus.imp().getScheduler().scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (DBRealm realm : db.getRealms().values()) {
+                        updateAlliances(realm.getId());
+                    }
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 60000, 1500000, TimeUnit.MILLISECONDS);
+
+        // update nations
+        Trocutus.imp().getScheduler().scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (DBRealm realm : db.getRealms().values()) {
+                        updateAllianceKingdoms(realm.getId());
+                    }
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 60000, 300000, TimeUnit.MILLISECONDS);
+
+        // update attacks
+
+        Trocutus.imp().getScheduler().scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    updateAllKingdoms(true, true, true, true);
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 60000, 3300000, TimeUnit.MILLISECONDS);
+
+        Trocutus.imp().getScheduler().scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (DBRealm realm : db.getRealms().values()) {
+                        updateAllianceInteractions(realm.getId());
+                    }
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 60000, 60000, TimeUnit.MILLISECONDS);
     }
 
     private JSONObject getJson(String url) throws IOException {
@@ -51,7 +116,8 @@ public class ScrapeKingdomUpdater {
         Element elem = doc.getElementById("app");
         if (elem == null) return null;
         String data = elem.attr("data-page");
-        data = URLDecoder.decode(data);
+        System.out.println("Data " + data);
+        data = StringEscapeUtils.unescapeHtml4(data);
         data = data.replaceAll("\\/", "/");
         // todo paginate
 
@@ -63,7 +129,7 @@ public class ScrapeKingdomUpdater {
         // todo support for realms
         // todo support for pagination
 
-        String url = "https://trounced.net/kingdom/" + auth.getKingdom(realmId).getName() + "/alliance/directory";
+        String url = "https://trounced.net/kingdom/" + auth.getKingdom(realmId).getSlug() + "/alliance/directory";
         JSONObject json = getJson(url);
 
         JSONObject props = json.getJSONObject("props");
@@ -81,6 +147,7 @@ public class ScrapeKingdomUpdater {
 
         Map<Integer, DBAlliance> original = new HashMap<>();
         List<DBAlliance> toSave = new ArrayList<>();
+        Set<Integer> allIds = new HashSet<>();
         for (int i = 0; i < alliances.length(); i++) {
             JSONObject alliance = alliances.getJSONObject(i);
             // map to pojo
@@ -90,11 +157,12 @@ public class ScrapeKingdomUpdater {
                 pacts.addAll(pojo.pacts);
             }
             allianceIdByTag.put(pojo.tag, pojo.id);
+            allIds.add(pojo.id);
 
             DBAlliance existing = db.getAlliance(pojo.id);
             boolean modified = false;
             if (existing == null) {
-                existing = new DBAlliance(pojo.id, realm_id, null, null, null, 0, 0, 0, 0);
+                existing = new DBAlliance(pojo.id, realm_id, null, null, "", 0, 0, 0, 0);
                 modified = true;
             } else {
                 original.put(existing.getId(), existing.copy());
@@ -108,12 +176,14 @@ public class ScrapeKingdomUpdater {
                 modified |= existing.setLevel_total(pojo.breakdown.next);
                 existing.setUpdated(System.currentTimeMillis());
             }
+
+            System.out.println("Modified " + modified + " | " + existing.getId() + " | " + existing.getName());
             if (modified) {
                 toSave.add(existing);
             }
         }
         if (!toSave.isEmpty()) {
-            db.saveAlliances(realm_id, original, toSave, true);
+            db.saveAlliances(realm_id, allIds, original, toSave, true);
         }
 
         updatePacts(realm_id, pacts, allianceIdByTag);
@@ -165,12 +235,12 @@ public class ScrapeKingdomUpdater {
      * @return a list of kingdoms that are in alliances but were not updated
      * @throws IOException
      */
-    public Set<DBKingdom> updateAllianceNations(int realmId) throws IOException {
+    public Set<DBKingdom> updateAllianceKingdoms(int realmId) throws IOException {
         Set<DBKingdom> leftAlliancePossible = db.getKingdomsMatching(f -> f.getAlliance_id() != 0 && f.getRealm_id() == realmId);
 
         for (DBAlliance alliance : db.getAlliances()) {
             if (alliance.getRealm_id() != realmId) continue;
-            String url = "https://trounced.net/kingdom/" + auth.getKingdom(realmId).getName() + "/alliance/" + alliance.getTag();
+            String url = "https://trounced.net/kingdom/" + auth.getKingdom(realmId).getSlug() + "/alliance/" + alliance.getTag();
             JSONObject json = getJson(url);
 
             JSONObject props = json.getJSONObject("props");
@@ -203,10 +273,10 @@ public class ScrapeKingdomUpdater {
     }
 
     public void updateKingdom(int realm_id, String name) throws IOException {
-        String url = "https://trounced.net/kingdom/" + auth.getKingdom(realm_id).getName() + "/search/" + name;
+        String url = "https://trounced.net/kingdom/" + auth.getKingdom(realm_id).getSlug() + "/search/" + name;
         JSONObject json = getJson(url);
         if (json == null) {
-            Set<DBKingdom> kingdoms = db.getKingdomsMatching(f -> f.getRealm_id() == realm_id && f.getName().equalsIgnoreCase(name));
+            Set<DBKingdom> kingdoms = db.getKingdomsMatching(f -> f.getRealm_id() == realm_id && f.getSlug().equalsIgnoreCase(name));
             if (kingdoms.size() > 0) {
                 db.deleteKingdoms(kingdoms);
             }
@@ -238,7 +308,7 @@ public class ScrapeKingdomUpdater {
 
     public void updateAllianceInteractions(int realmId) throws IOException {
         DBKingdom kingdom = auth.getKingdom(realmId);
-        String url = "https://trounced.net/kingdom/" + kingdom.getName() + "/alliance/page=";
+        String url = "https://trounced.net/kingdom/" + kingdom.getSlug() + "/alliance?page=";
         int page = 1;
 
         Integer latestId = db.getLatestInteractionAlliance(kingdom.getAlliance_id());
@@ -247,7 +317,9 @@ public class ScrapeKingdomUpdater {
         Map<Integer, JSONObject> interactionsById = new LinkedHashMap<>();
         int maxId = 0;
 
+        outer:
         while (true) {
+            System.out.println("Page " + page);
             JSONObject json = getJson(url + page);
             JSONObject props = json.getJSONObject("props");
             JSONObject interactionsInfo = props.getJSONObject("interactions");
@@ -256,7 +328,7 @@ public class ScrapeKingdomUpdater {
                 JSONObject interaction = interactions.getJSONObject(i);
                 int id = interaction.getInt("id");
                 maxId = Math.max(id, maxId);
-                if (id >= latestId) break;
+                if (id <= latestId) break outer;
                 interactionsById.put(id, interaction);
             }
             int last_page = interactionsInfo.getInt("last_page");
@@ -274,15 +346,103 @@ public class ScrapeKingdomUpdater {
         updateInteractions(interactionsById);
     }
 
-    public void updateInteractions(Map<Integer, JSONObject> interactionMap) {
+    public void updateInteractions(Map<Integer, JSONObject> interactionMap) throws JsonProcessingException {
+        Map<Integer, String> raw = new LinkedHashMap<>();
+        List<DBAttack> attacks = new ArrayList<>();
+        List<DBSpy> spies = new ArrayList<>();
         for (Map.Entry<Integer, JSONObject> entry : interactionMap.entrySet()) {
             int id = entry.getKey();
+            JSONObject interaction = entry.getValue();
+            String type = interaction.getString("type").toLowerCase();
+            switch (type) {
+                case "attack" -> {
+                    AttackInteraction.Attack pojo = mapper.readValue(interaction.toString(), AttackInteraction.Attack.class);
+                    DBAttack attack = new DBAttack(pojo);
+                    attacks.add(attack);
+                }
+                case "spy" -> {
+                    // mapper to
+                    SpyInteraction.Spy pojo = mapper.readValue(interaction.toString(), SpyInteraction.Spy.class);
+                    DBSpy spy = new DBSpy(pojo);
+                    spies.add(spy);
+                }
+                default -> {
+                    raw.put(id, interaction.toString());
+                }
+            }
         }
+        // sort by id
+        Collections.sort(attacks, Comparator.comparingInt(f -> f.id));
+        Collections.sort(spies, Comparator.comparingInt(f -> f.id));
 
+        db.saveSpyOps(new LinkedHashSet<>(spies));
+        db.saveAttacks(new LinkedHashSet<>(attacks));
+        db.saveUnknownInteractions(raw);
     }
 
-    public void updateLeaderboardNationsNonAA(BiConsumer<Integer, String> createdFlag, BiConsumer<DBKingdom, String> updatedFlag, Consumer<DBKingdom> checkDeleteFlag, Consumer<DBKingdom> checkUnlistedFlag) throws IOException {
-        int realmId = 7;
+    public String updateAllKingdoms(boolean fetchNew, boolean fetchChanged, boolean fetchDeleted, boolean fetchMissingSlow) throws IOException {
+        Map<Integer, String> fetchNewMap = new HashMap<>();
+        Map<DBKingdom, String> fetchChangedMap = new HashMap<>();
+        Set<DBKingdom> fetchDeletedSet = new HashSet<>();
+        Set<DBKingdom> fetchMissingSlowSet = new HashSet<>();
+
+        long start = System.currentTimeMillis();
+        for (DBRealm realm : Trocutus.imp().getDB().getRealms().values()) {
+            updateLeaderboardKingdoms(realm.getId(), new BiConsumer<Integer, String>() {
+                @Override
+                public void accept(Integer id, String name) {
+                    if (fetchNew) {
+                        fetchNewMap.put(id, name);
+                    }
+                }
+            }, new BiConsumer<DBKingdom, String>() {
+                @Override
+                public void accept(DBKingdom kingdom, String name) {
+                    if (fetchChanged) {
+                        fetchChangedMap.put(kingdom, name);
+                    }
+                }
+            }, new Consumer<DBKingdom>() {
+                @Override
+                public void accept(DBKingdom kingdom) {
+                    if (fetchDeleted) {
+                        fetchDeletedSet.add(kingdom);
+                    }
+                }
+            }, new Consumer<DBKingdom>() {
+                @Override
+                public void accept(DBKingdom kingdom) {
+                    if (fetchMissingSlow) {
+                        fetchMissingSlowSet.add(kingdom);
+                    }
+                }
+            });
+
+            for (Map.Entry<Integer, String> entry : fetchNewMap.entrySet()) {
+                updateKingdom(realm.getId(), entry.getValue());
+            }
+
+            for (Map.Entry<DBKingdom, String> entry : fetchChangedMap.entrySet()) {
+                updateKingdom(realm.getId(), entry.getValue());
+            }
+
+            for (DBKingdom kingdom : fetchDeletedSet) {
+                updateKingdom(kingdom.getRealm_id(), kingdom.getSlug());
+            }
+
+            for (DBKingdom kingdom : fetchMissingSlowSet) {
+                updateKingdom(kingdom.getRealm_id(), kingdom.getSlug());
+            }
+        }
+
+        return "Updated kingdoms in " + (System.currentTimeMillis() - start) + "ms\n" +
+                "New: " + fetchNewMap.size() + "\n" +
+                "Changed: " + fetchChangedMap.size() + "\n" +
+                "Deleted: " + fetchDeletedSet.size() + "\n" +
+                "Missing (from leaderboard): " + fetchMissingSlowSet.size();
+    }
+
+    public void updateLeaderboardKingdoms(int realmId, BiConsumer<Integer, String> createdFlag, BiConsumer<DBKingdom, String> updatedFlag, Consumer<DBKingdom> checkDeleteFlag, Consumer<DBKingdom> checkUnlistedFlag) throws IOException {
         // only update nations that have had their acreage change
 
         // https://trounced.net/leaderboard/7?primary=Kingdom&secondary=Acreage&tertiary=HERO_NAME

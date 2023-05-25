@@ -1,5 +1,7 @@
 package link.locutus.core.api.pojo.pages;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.Date;
 
 public class SpyInteraction {
@@ -38,6 +40,7 @@ public class SpyInteraction {
         public String tag;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Spy {
         public int id;
         public String type;

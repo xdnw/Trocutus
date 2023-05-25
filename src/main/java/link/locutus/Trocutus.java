@@ -17,6 +17,8 @@ import link.locutus.core.event.MainListener;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.GuildShardManager;
 import link.locutus.util.RateLimitUtil;
+import link.locutus.util.scheduler.CaughtRunnable;
+import link.locutus.util.scheduler.ThrowingConsumer;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
@@ -28,7 +30,9 @@ import net.dv8tion.jda.api.utils.cache.CacheFlag;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +42,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 public class Trocutus extends ListenerAdapter {
@@ -333,13 +338,35 @@ public class Trocutus extends ListenerAdapter {
         return rootAuth;
     }
 
+    public void runEventsAsync(ThrowingConsumer<Consumer<Event>> eventHandler) {
+        ArrayDeque<Event> events = new ArrayDeque<>();
+        eventHandler.accept(events::add);
+        runEventsAsync(events);
+    }
+
+    public <T extends Event> void runEventsAsync(Collection<T> events) {
+        if (events.isEmpty()) return;
+        getExecutor().submit(new CaughtRunnable() {
+            @Override
+            public void runUnsafe() {
+                for (Event event : events) event.post();
+            }
+        });
+    }
+
+    public static void post(Object event) {
+        imp().eventBus.post(event);
+    }
+
     public void runEvent(Event event) {
-        eventBus.post(event);
+        runEventsAsync(List.of(event));
     }
 
     public <T extends Event> void runEvents(Set<T> events) {
-        for (Event event : events) {
-            eventBus.post(event);
-        }
+        runEventsAsync(events);
+    }
+
+    public ScrapeKingdomUpdater getScraper() {
+        return scraper;
     }
 }

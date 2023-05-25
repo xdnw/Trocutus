@@ -1,25 +1,31 @@
 package link.locutus.core.api.pojo.pages;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.Date;
 
 public class Dashboard {
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Alliance{
         public int id;
         public String name;
         public String tag;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Hero{
         public String name;
         public int level;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Loyalty{
         public int total;
         public int level;
         public Perks perks;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Perks{
         public int income;
         public int attack;
@@ -35,11 +41,13 @@ public class Dashboard {
         public boolean sellCredits;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Realm{
         public int id;
         public String name;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Kingdom{
         public int id;
         public String name;

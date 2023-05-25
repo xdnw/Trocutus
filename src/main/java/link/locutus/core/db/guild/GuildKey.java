@@ -42,7 +42,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class GuildKey {
-    public static final GuildSetting<Set<Integer>> ALLIANCE_ID = new GuildSetting<Set<Integer>>(GuildSettingCategory.DEFAULT, Set.class, Long.class) {
+    public static final GuildSetting<Set<Integer>> ALLIANCE_ID = new GuildSetting<Set<Integer>>(GuildSettingCategory.DEFAULT, Set.class, Integer.class) {
         @Command(descMethod = "help")
         @RolePermission(Roles.ADMIN)
         public String registerAlliance(@Me GuildDB db, @Me User user, Set<DBAlliance> alliances) {
@@ -202,17 +202,44 @@ public class GuildKey {
             return "The #channel to receive alerts for defensive wars";
         }
     }.setupRequirements(f -> f.requiresAllies().requireActiveGuild());
-    public static GuildSetting<Boolean> SHOW_ALLY_DEFENSIVE_WARS = new GuildBooleanSetting(GuildSettingCategory.WAR_ALERTS) {
+
+    public static GuildSetting<MessageChannel> OFFENSIVE_SPY_CHANNEL = new GuildChannelSetting(GuildSettingCategory.WAR_ALERTS) {
         @Command(descMethod = "help")
         @RolePermission(Roles.ADMIN)
-        public String SHOW_ALLY_DEFENSIVE_WARS(@Me GuildDB db, @Me User user, boolean enabled) {
-            return SHOW_ALLY_DEFENSIVE_WARS.setAndValidate(db, user, enabled);
+        public String OFFENSIVE_SPY_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return OFFENSIVE_SPY_CHANNEL.setAndValidate(db, user, channel);
         }
+
         @Override
         public String help() {
-            return "Whether to show offensive war alerts for allies (true/false)";
+            return "The #channel to receive alerts for offensive spy ops";
         }
-    }.setupRequirements(f -> f.requires(DEFENSE_WAR_CHANNEL).requiresCoalition(Coalition.ALLIES));
+    }.setupRequirements(f -> f.requiresAllies().requireActiveGuild());
+
+    public static GuildSetting<MessageChannel> DEFENSIVE_SPY_CHANNEL = new GuildChannelSetting(GuildSettingCategory.WAR_ALERTS) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String OFFENSIVE_SPY_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return DEFENSIVE_SPY_CHANNEL.setAndValidate(db, user, channel);
+        }
+
+        @Override
+        public String help() {
+            return "The #channel to receive alerts for offensive spy ops";
+        }
+    }.setupRequirements(f -> f.requiresAllies().requireActiveGuild());
+
+//    public static GuildSetting<Boolean> SHOW_ALLY_DEFENSIVE_WARS = new GuildBooleanSetting(GuildSettingCategory.WAR_ALERTS) {
+//        @Command(descMethod = "help")
+//        @RolePermission(Roles.ADMIN)
+//        public String SHOW_ALLY_DEFENSIVE_WARS(@Me GuildDB db, @Me User user, boolean enabled) {
+//            return SHOW_ALLY_DEFENSIVE_WARS.setAndValidate(db, user, enabled);
+//        }
+//        @Override
+//        public String help() {
+//            return "Whether to show offensive war alerts for allies (true/false)";
+//        }
+//    }.setupRequirements(f -> f.requires(DEFENSE_WAR_CHANNEL).requiresCoalition(Coalition.ALLIES));
 
     public static GuildSetting<MessageChannel> OFFENSIVE_WAR_CHANNEL = new GuildChannelSetting(GuildSettingCategory.WAR_ALERTS) {
         @Command(descMethod = "help")

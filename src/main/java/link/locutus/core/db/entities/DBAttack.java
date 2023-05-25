@@ -49,7 +49,7 @@ public final class DBAttack {
 
     public DBAttack(AttackInteraction.Attack pojo) {
         this.id = pojo.id;
-        this.attacker_aa = pojo.attacker_alliance.id;
+        this.attacker_aa = pojo.attacker_alliance == null ? 0 : pojo.attacker_alliance.id;
         this.attacker_id = pojo.attacker.id;
         this.attacker_soldiers = pojo.data.attackerCasualties.soldiers;
         this.attacker_cavalry = pojo.data.attackerCasualties.cavalry;
@@ -61,12 +61,32 @@ public final class DBAttack {
         this.defenderAcreLoss = pojo.data.defenderAcreLoss;
         this.atkHeroExp = pojo.data.atkHeroExp;
         this.defHeroExp = pojo.data.defHeroExp;
-        this.defender_aa = pojo.defender_alliance.id;
+        this.defender_aa = pojo.defender_alliance == null ? 0 : pojo.defender_alliance.id;
         this.defender_id = pojo.defender.id;
         this.defender_soldiers = pojo.data.defenderCasualties.soldiers;
         this.defender_cavalry = pojo.data.defenderCasualties.cavalry;
         this.defender_archers = pojo.data.defenderCasualties.archers;
         this.defender_elites = pojo.data.defenderCasualties.elites;
         this.date = pojo.created_at.getTime();
+    }
+
+    public String getAttackerAllianceName() {
+        DBAlliance alliance = DBAlliance.get(attacker_aa);
+        return alliance == null ? "AA:" + attacker_aa : alliance.getName();
+    }
+
+    public String getDefenderAllianceName() {
+        DBAlliance alliance = DBAlliance.get(defender_aa);
+        return alliance == null ? "AA:" + defender_aa : alliance.getName();
+    }
+
+    public String getAttackerKingdomName() {
+        DBKingdom alliance = DBKingdom.get(attacker_id);
+        return alliance == null ? "kingdom:" + attacker_id : alliance.getName();
+    }
+
+    public String getDefenderKingdomName() {
+        DBKingdom alliance = DBKingdom.get(defender_id);
+        return alliance == null ? "kingdom:" + defender_id : alliance.getName();
     }
 }
