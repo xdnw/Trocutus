@@ -111,9 +111,9 @@ public class PermissionBinding extends BindingHelper {
         throw new IllegalCallerException("Your ingame alliance positions is below " + perm.value());
     }
 
-    @Binding("Must have the provided Locutus roles on discord\n" +
+    @Binding("Must have the provided bot roles on discord\n" +
             "If `any` is set then you only need one of the roles instead of all\n" +
-            "If `root` is set you need the role on the Locutus server\n" +
+            "If `root` is set you need the role on the this bot server\n" +
             "If `guild` is set you need the role in the guild matching that id\n" +
             "If `alliance` is set you need the role in the guild for that alliance")
     @RolePermission
@@ -126,7 +126,7 @@ public class PermissionBinding extends BindingHelper {
             guild = Trocutus.imp().getServer();
         } else if (perm.guild() > 0) {
             guild = Trocutus.imp().getDiscordApi().getGuildById(perm.guild());
-            if (guild == null) throw new IllegalCallerException("Guild " + perm.guild() + " does not exist" + " " + user.getAsMention() + " (are you sure Locutus is invited?)");
+            if (guild == null) throw new IllegalCallerException("Guild " + perm.guild() + " does not exist" + " " + user.getAsMention() + " (are you sure this bot is invited?)");
         }
         boolean hasAny = false;
         for (Roles requiredRole : perm.value()) {

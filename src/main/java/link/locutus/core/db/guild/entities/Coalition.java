@@ -59,7 +59,7 @@ public enum Coalition {
             return Roles.hasAny(user, guild, Roles.ADMIN, Roles.INTERNAL_AFFAIRS);
         }
     },
-    WHITELISTED("Is whitelisted to use locutus commands (root admin)") {
+    WHITELISTED("Is whitelisted to use bot commands (root admin)") {
         @Override
         public boolean hasPermission(Guild guild, User user) {
             return Roles.ADMIN.hasOnRoot(user);

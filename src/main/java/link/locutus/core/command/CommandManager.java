@@ -5,6 +5,7 @@ import link.locutus.command.binding.Key;
 import link.locutus.command.binding.LocalValueStore;
 import link.locutus.command.binding.SimpleValueStore;
 import link.locutus.command.binding.ValueStore;
+import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Me;
 import link.locutus.command.binding.bindings.PrimitiveBindings;
 import link.locutus.command.binding.bindings.PrimitiveValidators;
@@ -24,6 +25,8 @@ import link.locutus.core.db.entities.DBAlliance;
 import link.locutus.core.db.entities.DBKingdom;
 import link.locutus.core.db.entities.DBRealm;
 import link.locutus.core.db.guild.GuildDB;
+import link.locutus.core.db.guild.GuildKey;
+import link.locutus.core.db.guild.key.GuildSetting;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
@@ -34,6 +37,7 @@ import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import org.json.JSONObject;
 
 import javax.annotation.Nullable;
+import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -347,7 +351,36 @@ public class CommandManager {
     }
 
     public CommandManager registerCommands() {
+        registerSettings();
         return this;
+    }
+
+    private void registerSettings() {
+        this.commands.registerMethod(new SettingCommands(), List.of("settings"), "delete", "delete");
+        this.commands.registerMethod(new SettingCommands(), List.of("settings"), "sheets", "sheets");
+        this.commands.registerMethod(new SettingCommands(), List.of("settings"), "info", "info");
+
+        for (GuildSetting setting : GuildKey.values()) {
+            List<String> path = List.of("settings_" + setting.getCategory().name().toLowerCase(Locale.ROOT));
+
+            Method[] methods = setting.getClass().getDeclaredMethods();
+            Map<String, String> methodNameToCommandName = new HashMap<>();
+            for (Method method : methods) {
+                if (method.getAnnotation(Command.class) != null) {
+                    Command command = method.getAnnotation(Command.class);
+
+                    String[] aliases = command.aliases();
+                    String commandName = aliases.length == 0 ? method.getName() : aliases[0];
+                    methodNameToCommandName.put(method.getName(), commandName);
+                }
+            }
+
+            for (Map.Entry<String, String> entry : methodNameToCommandName.entrySet()) {
+                String methodName = entry.getKey();
+                String commandName = entry.getValue();
+                this.commands.registerMethod(setting, path, methodName, commandName);
+            }
+        }
     }
 
     public CommandGroup getCommands() {

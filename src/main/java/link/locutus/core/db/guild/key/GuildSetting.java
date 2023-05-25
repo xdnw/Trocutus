@@ -413,7 +413,7 @@ public abstract class GuildSetting<T> {
             if (kingdoms == null || kingdoms.isEmpty()) {
                 throw new IllegalArgumentException("The owner of this server (" + owner.getEffectiveName() + ") is not registered with the bot (see: " + "CM.register.cmd.toSlashMention()" + ")");
             }
-            long mostRecent = kingdoms.values().stream().map(DBKingdom::lastActive).max(Long::compareTo).orElse(0L);
+            long mostRecent = kingdoms.values().stream().map(DBKingdom::getLast_active).max(Long::compareTo).orElse(0L);
             // get max
 
             if (mostRecent < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30)) {

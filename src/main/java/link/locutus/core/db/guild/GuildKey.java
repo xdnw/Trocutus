@@ -32,6 +32,7 @@ import net.dv8tion.jda.api.exceptions.InsufficientPermissionException;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -121,7 +122,7 @@ public class GuildKey {
                             DBKingdom kingdom = auth.getKingdom(alliance.getRealm_id());
                             String url = alliance.getUrl(kingdom.getName());
 
-                            String content = auth.readStringFromURL(url);
+                            String content = auth.readStringFromURL(url, Collections.emptyMap(), false);
 
                             String idStr = db.getGuild().getId();
 
@@ -291,7 +292,7 @@ public class GuildKey {
             }
             Guild guild = Trocutus.imp().getDiscordApi().getGuildById(ids.getValue());
             if (guild == null)
-                throw new IllegalArgumentException("Invalid guild: `" + ids.getValue() + "` (are you sure locutus is in that server?)");
+                throw new IllegalArgumentException("Invalid guild: `" + ids.getValue() + "` (are you sure this bot is in that server?)");
             GuildDB otherDb = GuildDB.get(guild);
             if (guild.getIdLong() == db.getIdLong())
                 throw new IllegalArgumentException("You cannot set the delegate as this guild");
@@ -307,7 +308,7 @@ public class GuildKey {
             if (entry == null) return true;
             GuildDB otherDB = GuildDB.get(entry.getValue());
             if (otherDB == null) {
-                throw new IllegalArgumentException("Invalid guild: `" + entry.getValue() + "` (are you sure locutus is in that server?)");
+                throw new IllegalArgumentException("Invalid guild: `" + entry.getValue() + "` (are you sure this bot is in that server?)");
             }
             if (!Roles.ADMIN.has(author, otherDB.getGuild()))
                 throw new IllegalArgumentException("You do not have ADMIN on " + otherDB.getGuild());

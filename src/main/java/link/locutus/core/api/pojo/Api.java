@@ -6,31 +6,31 @@ import java.util.ArrayList;
 import java.util.Date;
 
 public class Api {
-    public class Abilities{
+    public static class Abilities {
         public int attack;
         public int defense;
         public int max_mana;
     }
 
-    public class Activity{
+    public static class Activity {
         public String label;
         public Date last_active;
     }
 
-    public class Alert{
+    public static class Alert {
         public int resource_level;
         public int alert_level;
         public int spell_alert;
     }
 
-    public class Alliance{
+    public static class Alliance {
         public int id;
         public String name;
         public String tag;
         public String permission;
     }
 
-    public class Army{
+    public static class Army {
         public int total;
         public int soldiers;
         public int cavalry;
@@ -38,20 +38,20 @@ public class Api {
         public int elites;
     }
 
-    public class Boosts{
+    public static class Boosts {
         public Offensive offensive;
         public Defensive defensive;
         public Economic economic;
     }
 
-    public class Bp{
+    public static class Bp {
         public int current;
         public int max;
         public int perTick;
         public int perAttack;
     }
 
-    public class Defensive{
+    public static class Defensive {
         public int defense;
         public int casualties;
         public int protectedAcres;
@@ -60,7 +60,7 @@ public class Api {
         public int spellDefense;
     }
 
-    public class Economic{
+    public static class Economic {
         public int undevelopedIncome;
         public int developedIncome;
         public int pactIncome;
@@ -69,17 +69,17 @@ public class Api {
         public int building;
     }
 
-    public class Energy{
+    public static class Energy {
         public Bp bp;
         public Sp sp;
     }
 
-    public class Equipment{
+    public static class Equipment {
         public Boosts boosts;
         public Sets sets;
     }
 
-    public class Hero{
+    public static class Hero {
         public String name;
         public int experience;
         public int level;
@@ -87,13 +87,17 @@ public class Api {
         public Abilities abilities;
     }
 
-    public class Income{
+    public static class Income {
         public int income;
         public int upkeep;
         public int net;
     }
 
-    public class Kingdom{
+    public static class Root {
+        public Kingdom kingdom;
+    }
+
+    public static class Kingdom{
         public String name;
         public String slug;
         public int gold;
@@ -114,7 +118,7 @@ public class Api {
         public Equipment equipment;
     }
 
-    public class Land{
+    public static class Land{
         public int total;
         public int undeveloped;
         public int developed;
@@ -123,18 +127,18 @@ public class Api {
         public double training_grounds;
     }
 
-    public class Loyalty{
+    public static class Loyalty{
         public int points;
         public int level;
     }
 
-    public class Mana{
+    public static class Mana{
         public int current;
         public int max;
         public int perTick;
     }
 
-    public class Offensive{
+    public static class Offensive{
         public int attack;
         public int casualties;
         public int bonusAcres;
@@ -143,16 +147,16 @@ public class Api {
         public int spellAttack;
     }
 
-    public class Pacts{
+    public static class Pacts{
         public ArrayList<Trade> trade;
     }
 
-    public class Protection{
+    public static class Protection{
         public boolean isCurrent;
         public Date expires;
     }
 
-    public class Sets{
+    public static class Sets{
         @JsonProperty("Offensive")
         public ArrayList<Object> offensive;
         @JsonProperty("Defensive")
@@ -162,24 +166,24 @@ public class Api {
         public ArrayList<Object> all;
     }
 
-    public class Sp{
+    public static class Sp{
         public int current;
         public int max;
         public int perTick;
         public int perAttack;
     }
 
-    public class Trade{
+    public static class Trade{
         public String kingdom;
         public boolean accepted;
     }
 
-    public class Vacation{
+    public static class Vacation{
         public boolean isCurrent;
         public Date starts;
     }
 
-    public class Vip{
+    public static class Vip{
         public boolean isCurrent;
         public Date expires;
     }

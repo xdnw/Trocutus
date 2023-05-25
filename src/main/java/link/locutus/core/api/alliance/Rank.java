@@ -8,4 +8,10 @@ public enum Rank {
     FOUNDER
 
     ;
+    public static Rank[] values = values();
+
+    public static Rank parse(String positionStr) {
+        if (positionStr.isEmpty()) return NONE;
+        return valueOf(positionStr.toUpperCase());
+    }
 }

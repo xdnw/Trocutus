@@ -15,7 +15,7 @@ public class Settings extends Config {
 
     @Ignore
     @Final
-    public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36 Edg/107.0.1418.52";
+    public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.50";
 
     @Comment({"The discord token of the bot (required)",
             "Found on the bot section of the Discord Developer Portal"})
@@ -33,9 +33,9 @@ public class Settings extends Config {
             "See: https://support.discord.com/hc/en-us/articles/206346498"})
     public long ROOT_COALITION_SERVER = 0;
 
-    @Comment("Your P&W username (optional, but recommended)")
+    @Comment("Your Trounced username (optional, but recommended)")
     public String USERNAME = "";
-    @Comment("Your P&W password (optional, but recommended)")
+    @Comment("Your Trounced password (optional, but recommended)")
     public String PASSWORD = "";
 
     @Comment("Your api key (generated if username/password is set)")
@@ -97,13 +97,13 @@ public class Settings extends Config {
                 "- See the task section to disable/adjust individual tasks"})
         public boolean REPEATING_TASKS = true;
 
-        @Comment("If P&W events should be enabled")
+        @Comment("If Trounced events should be enabled")
         public boolean EVENTS = true;
     }
 
     @Comment({
             "How often in seconds a task is run (set to 0 to disable)",
-            "Note: Politics and war is rate limited. You may experience issues if you run tasks too frequently"
+            "Note: Trounced is rate limited. You may experience issues if you run tasks too frequently"
     })
     public static class TASKS {
         @Create

@@ -4,12 +4,15 @@ import com.google.common.eventbus.AsyncEventBus;
 import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.TrouncedApi;
+import link.locutus.core.api.ScrapeKingdomUpdater;
+import link.locutus.core.api.pojo.Api;
 import link.locutus.core.command.CommandManager;
 import link.locutus.core.command.TrouncedSlash;
 import link.locutus.core.db.TrouncedDB;
 import link.locutus.core.db.entities.DBKingdom;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
+import link.locutus.core.event.Event;
 import link.locutus.core.event.MainListener;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.GuildShardManager;
@@ -22,8 +25,10 @@ import net.dv8tion.jda.api.utils.Compression;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,12 +45,34 @@ public class Trocutus {
     private final TrouncedApi apiPool;
     private final TrouncedApi rootApi;
     private final Auth rootAuth;
+    private final ScrapeKingdomUpdater scraper;
     private TrouncedSlash slashCommands;
     private final Map<Long, GuildDB> guildDatabases = new ConcurrentHashMap<>();
     private Guild server;
 
-    public static void main(String[] args) throws SQLException {
-        new Trocutus();
+    public static void main(String[] args) throws SQLException, InterruptedException, IOException {
+        Settings.INSTANCE.reload(Settings.INSTANCE.getDefaultFile());
+
+        TrouncedApi api = new TrouncedApi(ApiKeyPool.builder().addKeyUnsafe(Settings.INSTANCE.API_KEY_PRIMARY).build());
+        for (Api.Kingdom kingdom : api.fetchData()) {
+            System.out.println("\n\n - - - - - - \n\n");
+            System.out.println(kingdom.name);
+        }
+        System.out.println();
+
+        Auth auth = new Auth(Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
+        String result = auth.readStringFromURL("https://trounced.net/kingdom/locutus/search/khazuland", new HashMap<>(), false);
+        System.out.println(result);
+        TrouncedDB db = new TrouncedDB();
+        ScrapeKingdomUpdater update = new ScrapeKingdomUpdater(auth, db);
+//        update.updateAlliances();
+//        auth.test();
+
+        System.out.println("Auth " + auth);
+
+        // load settings
+//        Trocutus instance = new Trocutus().start();
+        Settings.INSTANCE.save(Settings.INSTANCE.getDefaultFile());
     }
 
     private static Trocutus INSTANCE;
@@ -54,7 +81,7 @@ public class Trocutus {
     private GuildShardManager manager;
     private final AsyncEventBus eventBus;
     private final TrouncedDB rootDb;
-    public Trocutus() throws SQLException {
+    public Trocutus() throws SQLException, IOException {
         if (INSTANCE != null) throw new IllegalStateException("Already running.");
         INSTANCE = this;
 
@@ -77,18 +104,15 @@ public class Trocutus {
         if (Settings.INSTANCE.BOT_TOKEN.isEmpty()) {
             throw new IllegalStateException("Please set BOT_TOKEN in " + Settings.INSTANCE.getDefaultFile());
         }
+        if (Settings.INSTANCE.API_KEY_PRIMARY.isEmpty()) {
+            throw new IllegalStateException("Please set API_KEY_PRIMARY in " + Settings.INSTANCE.getDefaultFile());
+        }
+        if (Settings.INSTANCE.USERNAME.isEmpty() || Settings.INSTANCE.PASSWORD.isEmpty()) {
+            throw new IllegalStateException("Please set USERNAME/PASSWORD in " + Settings.INSTANCE.getDefaultFile());
+        }
         this.rootAuth = new Auth(Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
-        if (Settings.INSTANCE.API_KEY_PRIMARY.isEmpty()) {
-            if (Settings.INSTANCE.USERNAME.isEmpty() || Settings.INSTANCE.PASSWORD.isEmpty()) {
-                throw new IllegalStateException("Please set API_KEY_PRIMARY or USERNAME/PASSWORD in " + Settings.INSTANCE.getDefaultFile());
-            }
-            ApiKeyPool.ApiKey key = rootAuth.fetchApiKey();
-            Settings.INSTANCE.API_KEY_PRIMARY = key.getKey();
-        }
-
-        if (Settings.INSTANCE.API_KEY_PRIMARY.isEmpty()) {
-            throw new IllegalStateException("Please set API_KEY_PRIMARY or USERNAME/PASSWORD in " + Settings.INSTANCE.getDefaultFile());
-        }
+        this.scraper = new ScrapeKingdomUpdater(this.rootAuth, this.rootDb);
+        this.scraper.updateSelf();
 
         Settings.INSTANCE.NATION_ID = -1;
         Integer nationNameFromKey = rootDb.getKingdomFromApiKey(Settings.INSTANCE.API_KEY_PRIMARY);
@@ -321,5 +345,15 @@ public class Trocutus {
             throw new IllegalStateException("user/pass not provided in config.yml");
         }
         return rootAuth;
+    }
+
+    public void runEvent(Event event) {
+        eventBus.post(event);
+    }
+
+    public <T extends Event> void runEvents(Set<T> events) {
+        for (Event event : events) {
+            eventBus.post(event);
+        }
     }
 }

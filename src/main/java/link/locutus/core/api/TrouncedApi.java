@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fizzed.rocker.runtime.PrimitiveCollections;
 import link.locutus.core.api.pojo.Api;
 import link.locutus.core.db.TrouncedDB;
+import link.locutus.util.FileUtil;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -25,7 +27,7 @@ public class TrouncedApi {
         this.mapper = new ObjectMapper();
     }
 
-    public Set<Api.Kingdom> fetchData() throws JsonProcessingException {
+    public Set<Api.Kingdom> fetchData() throws IOException {
         Set<Api.Kingdom> kingdoms = new LinkedHashSet<>();
 
         for (ApiKeyPool.ApiKey key : pool.getKeys()) {
@@ -37,12 +39,15 @@ public class TrouncedApi {
         return kingdoms;
     }
 
-    private Api.Kingdom fetchData(ApiKeyPool.ApiKey key) throws JsonProcessingException {
-        String urlFull = url + "?token=" + key;
+    private Api.Kingdom fetchData(ApiKeyPool.ApiKey key) throws IOException {
+        String urlFull = url + "?token=" + key.getKey();
 
-        // read url using jackson
-        Api.Kingdom kingdom = null;
-        return mapper.readValue(urlFull, Api.Kingdom.class);
+        String content = FileUtil.readStringFromURL(urlFull);
+        Api.Root root = mapper.readValue(content, Api.Root.class);
+        if (root != null && root.kingdom != null) {
+            return root.kingdom;
+        }
+        return null;
     }
 
 }
