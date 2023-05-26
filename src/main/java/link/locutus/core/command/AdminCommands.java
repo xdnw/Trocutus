@@ -17,7 +17,13 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class AdminCommands {
-
+    @RolePermission(value = Roles.ADMIN, root = true)
+    @Command
+    public String sync(int realm, String name) throws IOException {
+        long start = System.currentTimeMillis();
+        Trocutus.imp().getScraper().updateKingdom(realm, name);
+        return "Updated kingdom in " + (System.currentTimeMillis() - start) + "ms";
+    }
     @RolePermission(value = Roles.ADMIN, root = true)
     @Command
     public String syncInteractions() throws IOException {

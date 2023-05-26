@@ -903,7 +903,7 @@ public class TrouncedDB extends DBMain {
             stmt.setString(6, kingdom.getSlug());
             stmt.setInt(7, kingdom.getTotal_land());
             stmt.setInt(8, kingdom.getAlert_level());
-            stmt.setInt(9, kingdom.getResource_level());
+            stmt.setInt(9, kingdom.getResource_level().ordinal());
             stmt.setInt(10, kingdom.getSpell_alert());
             stmt.setLong(11, kingdom.getLast_active());
             stmt.setLong(12, kingdom.getVacation_start());
@@ -912,7 +912,18 @@ public class TrouncedDB extends DBMain {
             stmt.setLong(15, kingdom.getLast_fetched());
         }
     };
-
+    public int[] saveKingdoms(List<DBKingdom> toSave) {
+        int[] result;
+        String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        if (toSave.size() == 1) {
+            DBKingdom kingdom = toSave.iterator().next();
+            result = new int[]{update(query, stmt -> setKingdom.accept(kingdom, stmt))};
+        } else {
+            result = executeBatch(toSave, query, setKingdom);
+        }
+        return result;
+    }
     public int[] saveKingdoms(Map<Integer, DBKingdom> original, List<DBKingdom> toSave, boolean deleteMissing) {
         if (toSave.isEmpty()) return new int[0];
         Set<Event> events = new HashSet<>();
@@ -943,15 +954,7 @@ public class TrouncedDB extends DBMain {
             }
         }
 
-        int[] result;
-        String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        if (toSave.size() == 1) {
-            DBKingdom kingdom = toSave.iterator().next();
-            result = new int[]{update(query, stmt -> setKingdom.accept(kingdom, stmt))};
-        } else {
-            result = executeBatch(toSave, query, setKingdom);
-        }
+        int[] result = saveKingdoms(toSave);
 
         if (!events.isEmpty()) {
             Trocutus.imp().runEvents(events);

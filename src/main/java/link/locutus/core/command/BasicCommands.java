@@ -14,6 +14,7 @@ import link.locutus.command.command.IMessageIO;
 import link.locutus.command.impl.discord.permission.RolePermission;
 import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
+import link.locutus.core.api.pojo.pages.AllianceMembers;
 import link.locutus.core.db.entities.DBAlliance;
 import link.locutus.core.db.entities.DBAttack;
 import link.locutus.core.db.entities.DBKingdom;
@@ -30,6 +31,7 @@ import net.dv8tion.jda.api.utils.TimeUtil;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -83,7 +85,7 @@ public class BasicCommands {
         for (Map.Entry<DBRealm, DBKingdom> entry : me.entrySet()) {
             DBKingdom kingdom = entry.getValue();
             DBRealm realm = entry.getKey();
-            result.append("# **" + realm.getName() + "**\n");
+            result.append("# **" + realm.getName() + "/" + realm.getId() + "**\n");
 
             result.append(kingdom.getName() + " | " + kingdom.getAllianceName() + "\n");
             result.append("position: `" + kingdom.getPosition() + "`\n");
@@ -150,7 +152,7 @@ public class BasicCommands {
             DBRealm realm = kingdom.getRealm();
 
             DBKingdom myKingdom = me.get(realm);
-            String myName = myKingdom != null ? myKingdom.getName() : "<your_name>";
+            String myName = myKingdom != null ? myKingdom.getSlug() : "__your_name__";
             String url = kingdom.getUrl(myName);
             result.append("<" + url + ">\n");
 
@@ -179,7 +181,7 @@ public class BasicCommands {
             long total_land = kingdoms.stream().mapToLong(k -> k.getTotal_land()).sum();
             double average_land = kingdoms.stream().mapToLong(k -> k.getTotal_land()).average().orElse(0);
             double average_alert = kingdoms.stream().mapToDouble(k -> k.getAlert_level()).average().orElse(0);
-            double average_resource = kingdoms.stream().mapToDouble(k -> k.getResource_level()).average().orElse(0);
+            double average_resource = kingdoms.stream().mapToDouble(k -> k.getResource_level().ordinal()).average().orElse(0);
             double average_spell = kingdoms.stream().mapToDouble(k -> k.getSpell_alert()).average().orElse(0);
             long total_hero_levels = kingdoms.stream().mapToLong(k -> k.getHero_level()).sum();
             double average_hero_level = kingdoms.stream().mapToDouble(k -> k.getHero_level()).average().orElse(0);
@@ -265,18 +267,82 @@ public class BasicCommands {
         return "Done sending mail:\n- " + String.join("\n- ", full);
     }
 
-//    @Command
-//    public String raid(DBRealm realm, int score) {
-//        // -50% -> 50%
-//        double minScore = score * 0.5;
-//        double maxScore = score * 1.5;
-//        Set<DBKingdom> inRange = realm.getKindoms(f -> f.getTotal_land() >= minScore && f.getTotal_land() <= maxScore);
-//    }
+    @Command
+    public String raid(DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("g") boolean sortGold, @Switch("l") boolean sortLand) throws IOException {
+        if (sortGold && sortLand) {
+            sortGold = false;
+            sortLand = false;
+        }
+        DBKingdom myKingdom = me.get(realm);
+        if (myKingdom == null) return "You are not in a kingdom in this realm";
+
+        DBKingdom root = Trocutus.imp().rootAuth().getKingdom(realm.getId());
+        if (root == null) return "Could not find root kingdom";
+        if (root.getAlliance_id() != myKingdom.getAlliance_id()) return "You are not in the same alliance as " + root.getName() + " | " + root.getAllianceName();
+
+        AllianceMembers.AllianceMember memberInfo = Trocutus.imp().getScraper().getAllianceMemberStrength(myKingdom.getRealm_id(), myKingdom.getId());
+        if (memberInfo == null) return "Could not find member info for " + myKingdom.getName();
+
+        // -50% -> 50%
+        double minScore = memberInfo.land.total * 0.5;
+        double maxScore = memberInfo.land.total * 1.5;
+        Set<DBKingdom> inRange = realm.getKindoms(f -> f.getTotal_land() >= minScore && f.getTotal_land() <= maxScore);
+        Map<DBKingdom, DBSpy> spyops = new HashMap<>();
+        List<Map.Entry<DBKingdom, Long>> values = new ArrayList<>();
+
+        for (DBKingdom kingdom : inRange) {
+            DBSpy spy = kingdom.getLatestSpyReport();
+            if (spy == null) continue;
+            if (spy.defense > memberInfo.stats.attack) continue;
+            double goldLoot =  (long) (spy.gold * 0.2);
+            double defenderRatio = kingdom.getTotal_land() / (double) memberInfo.land.total;
+            double landLoot = 0.1 * kingdom.getTotal_land() * (Math.pow(defenderRatio, 2.2));
+
+            double value;
+            if (sortGold) {
+                value = goldLoot;
+            } else if(sortLand) {
+                value = landLoot;
+            } else {
+                value = goldLoot + landLoot * 500;
+            }
+            values.add(Map.entry(kingdom, (long) value));
+        }
+
+        // sort
+        values.sort((o1, o2) -> Long.compare(o2.getValue(), o1.getValue()));
+
+        String types;
+        if (sortGold) types = "gold";
+        else if (sortLand) types = "land";
+        else types = "gold + land";
+
+        StringBuilder response = new StringBuilder();
+
+        response.append("## **Targets for " + myKingdom.getName() + "**: (" + myKingdom.getTotal_land() + " land | " + memberInfo.stats.attack + " attack)\n");
+        for (Map.Entry<DBKingdom, Long> entry : values) {
+            DBKingdom kingdom = entry.getKey();
+            DBSpy spy = kingdom.getLatestSpyReport();
+            double value = entry.getValue();
+            response.append("__**" + kingdom.getName() + " | " + kingdom.getAllianceName() + ":**__ " + kingdom.getTotal_land() + " ns\n");
+            response.append("<" + kingdom.getUrl(myKingdom.getSlug()) + "> ");
+            response.append("Worth: `$" + MathMan.format((long) value) + "` (" + types + ")\n");
+            response.append("Spied: " + DiscordUtil.timestamp(spy.date, "R") + " | ");
+            response.append("Active: " + DiscordUtil.timestamp(kingdom.getLast_active(), "R") + "\n");
+            response.append("Attack Str: `" + spy.attack + "` | Defense Str: `" + spy.defense + "`\n");
+            response.append("Resource: `" + kingdom.getResource_level() + "` | Alert: `" + kingdom.getAlert_level() + "`\n\n");
+        }
+
+        response.append("\n\n`note: Please use '/spyop' to find suitable kingdoms to spy`");
+        response.append("\n`note: you loot 20% of your opponents unprotected gold");
+        response.append("\n`note: you need 1 more attack than enemy defense to win`");
+        return response.toString();
+    }
 
     @Command
     public String spyop(DBRealm realm, @Me Map<DBRealm, DBKingdom> me, int score, @Switch("n") @Default("5") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin) {
         DBKingdom myKingdom = me.get(realm);
-        String myName = myKingdom == null ? "<your_name>" : myKingdom.getSlug();
+        String myName = myKingdom == null ? "__your_name__" : myKingdom.getSlug();
         // -50% -> 50%
         double minScore = score * 0.5;
         double maxScore = score * 1.5;
@@ -303,7 +369,7 @@ public class BasicCommands {
             }
             long value;
             if (spy == null) {
-                value = Integer.MAX_VALUE + kingdom.getResource_level();
+                value = Integer.MAX_VALUE + kingdom.getResource_level().ordinal();
             } else {
                 spies.put(kingdom.getId(), spy);
                 DBAttack def = kingdom.getLatestDefensive();

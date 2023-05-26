@@ -66,10 +66,12 @@ public class GuildHandler {
         String defenderKingdomName = attack.getDefenderKingdomName();
         body.append("## Attacker: `" + attackerKingdomName + "` | `" + attackerAllianceName + "`\n");
         if (attacker != null) {
+            body.append("<" + attacker.getUrl("__your_name__") + ">\n");
             body.append("land: `" + attacker.getTotal_land() + "`\n");
         }
         body.append("## Defender: `" + defenderKingdomName + "` | `" + defenderAllianceName + "`\n\n");
         if (defender != null) {
+            body.append("<" + defender.getUrl("__your_name__") + ">\n");
             body.append("land: `" + defender.getTotal_land() + "`\n");
         }
 
@@ -116,15 +118,17 @@ public class GuildHandler {
 
         if (attacker != null){
             body.append("## Attacker: `").append(attacker.getName()).append("` | `").append(attacker.getAllianceName()).append("`\n");
+            body.append("<" + attacker.getUrl("__your_name__") + ">\n");
+            body.append("land: `" + attacker.getTotal_land() + "`\n");
         } else {
             body.append("## Attacker: `").append(spy.attacker_id).append("` | `").append(spy.attacker_aa).append("`\n");
-            body.append("land: `" + attacker.getTotal_land() + "`\n");
         }
         if (defender != null) {
             body.append("## Defender: `").append(defender.getName()).append("` | `").append(defender.getAllianceName()).append("`\n");
+            body.append("<" + defender.getUrl("__your_name__") + ">\n");
+            body.append("land: `" + defender.getTotal_land() + "`\n");
         } else {
             body.append("## Defender: `").append(spy.defender_id).append("` | `").append(spy.defender_aa).append("`\n");
-            body.append("land: `" + defender.getTotal_land() + "`\n");
         }
 
         if (includeInfo) {

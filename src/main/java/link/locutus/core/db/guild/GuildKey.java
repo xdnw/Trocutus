@@ -139,7 +139,7 @@ public class GuildKey {
                         }
 
                         if (!isValid) {
-                            String msg = "1. Go to: <" + alliance.getUrl("<username>") + ">\n" +
+                            String msg = "1. Go to: <" + alliance.getUrl("__your_name__") + ">\n" +
                                     "2. Scroll down to where it says Alliance Description:\n" +
                                     "3. Put your guild id `" + db.getIdLong() + "` somewhere in the text\n" +
                                     "4. Click save\n" +

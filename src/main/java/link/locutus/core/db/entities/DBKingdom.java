@@ -3,6 +3,7 @@ package link.locutus.core.db.entities;
 import link.locutus.Trocutus;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
+import link.locutus.core.api.game.ResourceLevel;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
@@ -71,7 +72,7 @@ public class DBKingdom {
     }
 
     private final int id;
-    private final int realm_id;
+    private int realm_id;
     private int alliance_id;
     private Rank position;
     private String name;
@@ -165,8 +166,8 @@ public class DBKingdom {
         return hero_level;
     }
 
-    public int getResource_level() {
-        return resource_level;
+    public ResourceLevel getResource_level() {
+        return ResourceLevel.values[resource_level];
     }
 
     public int getSpell_alert() {
@@ -328,5 +329,9 @@ public class DBKingdom {
 
     public DBAttack getLatestDefensive() {
         return Trocutus.imp().getDB().getLatestDefensive(id);
+    }
+
+    public void setRealm_id(int realmId) {
+        this.realm_id = realmId;
     }
 }

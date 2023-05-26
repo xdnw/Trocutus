@@ -7,6 +7,7 @@ import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.TreatyType;
 import link.locutus.core.api.pojo.pages.AllianceDirectory;
+import link.locutus.core.api.pojo.pages.AllianceMembers;
 import link.locutus.core.api.pojo.pages.AlliancePage;
 import link.locutus.core.api.pojo.pages.AttackInteraction;
 import link.locutus.core.api.pojo.pages.Dashboard;
@@ -20,16 +21,14 @@ import link.locutus.core.db.entities.DBSpy;
 import link.locutus.core.db.entities.DBTreaty;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -49,6 +48,8 @@ public class ScrapeKingdomUpdater {
     private final Auth auth;
     private final ObjectMapper mapper;
     private final TrouncedDB db;
+
+    private final Map<Integer, AllianceMembers.AllianceMember> allianceMembers = new ConcurrentHashMap<>();
 
     public ScrapeKingdomUpdater(Auth auth, TrouncedDB db) {
         this.auth = auth;
@@ -108,6 +109,26 @@ public class ScrapeKingdomUpdater {
                 }
             }
         }, 60000, 60000, TimeUnit.MILLISECONDS);
+
+        Trocutus.imp().getScheduler().scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for (DBRealm realm : db.getRealms().values()) {
+                        fetchAllianceMemberStrength(realm.getId());
+                    }
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 80000, 65000, TimeUnit.MILLISECONDS);
+    }
+
+    public AllianceMembers.AllianceMember getAllianceMemberStrength(int realm_id, int kingdom_id) throws IOException {
+        if (allianceMembers.isEmpty()) {
+            fetchAllianceMemberStrength(realm_id);
+        }
+        return allianceMembers.get(kingdom_id);
     }
 
     private JSONObject getJson(String url) throws IOException {
@@ -189,8 +210,11 @@ public class ScrapeKingdomUpdater {
         updatePacts(realm_id, pacts, allianceIdByTag);
     }
 
-    private DBKingdom toKingdom(JSONObject kingdom, BiConsumer<Integer, DBKingdom> makeCopy, AtomicBoolean modifiedFlag) throws JsonProcessingException {
+    private DBKingdom toKingdom(int realm, JSONObject kingdom, BiConsumer<Integer, DBKingdom> makeCopy, AtomicBoolean modifiedFlag) throws JsonProcessingException {
         AlliancePage.Kingdom pojo = mapper.readValue(kingdom.toString(), AlliancePage.Kingdom.class);
+        if (pojo.realm_id == 0 && realm != -1) {
+            pojo.realm_id = realm;
+        }
 
         DBKingdom existing = db.getKingdom(pojo.id);
 
@@ -203,6 +227,10 @@ public class ScrapeKingdomUpdater {
         }
         {
             System.out.println("updating kingdom " + pojo.name + " | " + kingdom);
+            if (existing.getRealm_id() != pojo.realm_id && pojo.realm_id != 0) {
+                existing.setRealm_id(pojo.realm_id);
+                db.saveKingdoms(List.of(existing));
+            }
             modified |= existing.setName(pojo.name);
             modified |= existing.setSlug(pojo.slug);
             modified |= existing.setAlliance_id(pojo.alliance_id);
@@ -257,7 +285,7 @@ public class ScrapeKingdomUpdater {
             for (int i = 0; i < kingdoms.length(); i++) {
                 JSONObject kingdom = kingdoms.getJSONObject(i);
                 AtomicBoolean updateFlag = new AtomicBoolean();
-                DBKingdom existing = toKingdom(kingdom, (id, copy) -> original.put(id, copy), updateFlag);
+                DBKingdom existing = toKingdom(realmId, kingdom, (id, copy) -> original.put(id, copy), updateFlag);
                 leftAlliancePossible.remove(existing);
                 if (updateFlag.get()) {
                     toSave.add(existing);
@@ -288,21 +316,25 @@ public class ScrapeKingdomUpdater {
             JSONObject target = props.getJSONObject("target");
             AtomicBoolean updateFlag = new AtomicBoolean();
             Map<Integer, DBKingdom> copyMap = new HashMap<>();
-            DBKingdom existing = toKingdom(target, (id, copy) -> copyMap.put(id, copy), updateFlag);
+            DBKingdom existing = toKingdom(realm_id, target, (id, copy) -> copyMap.put(id, copy), updateFlag);
 
             if (updateFlag.get()) {
                 db.saveKingdoms(copyMap, List.of(existing), false);
             }
 
-            // interactions
-            JSONArray interactions = props.getJSONArray("interactions");
-            Map<Integer, JSONObject> interactionMap = new LinkedHashMap<>();
-            for (int i = 0; i < interactions.length(); i++) {
-                JSONObject interaction = interactions.getJSONObject(i);
-                int id = interaction.getInt("id");
-                interactionMap.put(id, interaction);
-            }
-            updateInteractions(interactionMap);
+            try {
+                // interactions
+                JSONArray interactions = props.getJSONArray("interactions");
+                Map<Integer, JSONObject> interactionMap = new LinkedHashMap<>();
+                for (int i = 0; i < interactions.length(); i++) {
+                    JSONObject interaction = interactions.getJSONObject(i);
+                    int id = interaction.getInt("id");
+                    interactionMap.put(id, interaction);
+                }
+                updateInteractions(interactionMap);
+            } catch (JSONException ignore) {
+                ignore.printStackTrace();
+            };
         }
     }
 
@@ -603,7 +635,7 @@ public class ScrapeKingdomUpdater {
     public DBKingdom updateSelf(JSONObject self) throws JsonProcessingException {
         AtomicBoolean updateFlag = new AtomicBoolean();
         Map<Integer, DBKingdom> copyMap = new HashMap<>();
-        DBKingdom existing = toKingdom(self, (id, copy) -> copyMap.put(id, copy), updateFlag);
+        DBKingdom existing = toKingdom(-1, self, (id, copy) -> copyMap.put(id, copy), updateFlag);
 
         if (updateFlag.get()) {
             db.saveKingdoms(copyMap, List.of(existing), false);
@@ -614,5 +646,33 @@ public class ScrapeKingdomUpdater {
         // todo extra?
 
         return existing;
+    }
+
+    public Map<Integer, AllianceMembers.AllianceMember> fetchAllianceMemberStrength(int realmId) throws IOException {
+        String url = "https://trounced.net/kingdom/" + auth.getKingdom(realmId).getSlug() + "/alliance/members";
+        JSONObject json = getJson(url);
+
+        // props
+        JSONObject props = json.getJSONObject("props");
+        // kingdoms
+
+        JSONArray membersJson = props.getJSONArray("kingdoms");
+        for (int i = 0; i < membersJson.length(); i++) {
+            JSONObject memberJson = membersJson.getJSONObject(i);
+            {
+                AtomicBoolean updateFlag = new AtomicBoolean();
+                Map<Integer, DBKingdom> copyMap = new HashMap<>();
+                DBKingdom existing = toKingdom(-1, memberJson, (id, copy) -> copyMap.put(id, copy), updateFlag);
+
+                if (updateFlag.get()) {
+                    db.saveKingdoms(copyMap, List.of(existing), false);
+                }
+            }
+
+            AllianceMembers.AllianceMember member = mapper.readValue(memberJson.toString(), AllianceMembers.AllianceMember.class);
+            allianceMembers.put(member.id, member);
+
+        }
+        return allianceMembers;
     }
 }

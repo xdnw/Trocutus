@@ -82,11 +82,13 @@ public class CommandManager extends ListenerAdapter {
     }
 
     public CommandManager registerCommands() {
+        this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "sync", "kingdom");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncInteractions", "interactions");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAlliances", "alliances");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAllianceKingdoms", "kingdoms_in_aa");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAllKingdoms", "kingdoms");
 
+        this.commands.registerMethod(new BasicCommands(), List.of(), "raid", "raid");
         this.commands.registerMethod(new BasicCommands(), List.of(), "spyop", "spyop");
         this.commands.registerMethod(new BasicCommands(), List.of(), "alliance", "alliance");
         this.commands.registerMethod(new BasicCommands(), List.of(), "who", "who");
