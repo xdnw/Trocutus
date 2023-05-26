@@ -1,13 +1,14 @@
-package link.locutus.core.db.entities;
+package link.locutus.core.db.entities.alliance;
 
 import link.locutus.Trocutus;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.guild.GuildDB;
-import link.locutus.core.settings.Settings;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
 
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -80,6 +81,10 @@ public class DBAlliance {
         return result;
     }
 
+
+    public Map<Integer, DBTreaty> getTreaties() {
+        return Trocutus.imp().getDB().getTreaties(realm_id, alliance_id);
+    }
 
     public DBRealm getRealm() {
         return DBRealm.getOrCreate(realm_id);

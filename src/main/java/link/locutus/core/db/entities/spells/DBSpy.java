@@ -1,6 +1,7 @@
-package link.locutus.core.db.entities;
+package link.locutus.core.db.entities.spells;
 
 import link.locutus.core.api.pojo.pages.SpyInteraction;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 
 public class DBSpy {
     public final int id;

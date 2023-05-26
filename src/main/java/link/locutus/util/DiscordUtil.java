@@ -9,17 +9,12 @@ import link.locutus.command.command.CommandBehavior;
 import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.command.IMessageIO;
 import link.locutus.command.impl.discord.DiscordChannelIO;
-import link.locutus.core.db.entities.DBAlliance;
-import link.locutus.core.db.entities.DBKingdom;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
-import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.core.settings.Settings;
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.Role;
@@ -29,45 +24,26 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
-import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.utils.FileUpload;
 import org.apache.commons.lang3.text.WordUtils;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.json.JSONObject;
-import org.jsoup.internal.StringUtil;
 
 import java.awt.Color;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.util.AbstractMap;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class DiscordUtil {
     public static Color BACKGROUND_COLOR = Color.decode("#36393E");
@@ -415,6 +391,21 @@ public class DiscordUtil {
         name = name.trim();
         name = name.replaceAll(" ", "-");
         return name;
+    }
+
+    public static User findUser(String arg) {
+        if (arg.contains("#")) {
+            String[] split = arg.split("#");
+            if (split.length == 2) {
+                return Trocutus.imp().getDiscordApi().getUserByTag(split[0], split[1]);
+            }
+        } else {
+            List<User> users = Trocutus.imp().getDiscordApi().getUsersByName(arg, true);
+            if (users.size() == 1) {
+                return users.get(0);
+            }
+        }
+        return getUser(arg);
     }
 
     public static User getUser(String arg) {

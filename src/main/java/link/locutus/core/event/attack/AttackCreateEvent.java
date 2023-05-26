@@ -1,7 +1,7 @@
 package link.locutus.core.event.attack;
 
 import link.locutus.Trocutus;
-import link.locutus.core.db.entities.DBAttack;
+import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.event.GuildScopeEvent;
 
 import java.util.concurrent.TimeUnit;

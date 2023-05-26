@@ -1,6 +1,8 @@
-package link.locutus.core.db.entities;
+package link.locutus.core.db.entities.war;
 
 import link.locutus.core.api.pojo.pages.AttackInteraction;
+import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 
 public final class DBAttack {
     public final int id;

@@ -3,29 +3,37 @@ package link.locutus.core.db.guild;
 import com.google.common.eventbus.AsyncEventBus;
 import com.google.common.eventbus.EventBus;
 import link.locutus.Trocutus;
+import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.DBMain;
-import link.locutus.core.db.entities.AllianceList;
-import link.locutus.core.db.entities.DBAlliance;
+import link.locutus.core.db.entities.alliance.AllianceList;
+import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBTreaty;
 import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.db.guild.key.GuildSetting;
 import link.locutus.core.settings.Settings;
+import link.locutus.util.TimeUtil;
+import link.locutus.util.builder.RankBuilder;
 import link.locutus.util.scheduler.ThrowingConsumer;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -589,5 +597,130 @@ public class GuildDB extends DBMain {
 
     public AllianceList getAllianceList() {
         return new AllianceList(getAlliances());
+    }
+
+
+    public Function<DBKingdom, Boolean> getCanRaid() {
+        Integer topX = getOrNull(GuildKey.DO_NOT_RAID_TOP_X);
+        if (topX == null) topX = 0;
+        return getCanRaid(topX, true);
+    }
+
+    public Function<DBKingdom, Boolean> getCanRaid(int topX, boolean checkTreaties) {
+        Set<Integer> dnr = new HashSet<>(getCoalition(Coalition.ALLIES));
+        dnr.addAll(getCoalition("dnr"));
+        Set<Integer> dnr_active = new HashSet<>(getCoalition("dnr_active"));
+        Set<Integer> dnr_member = new HashSet<>(getCoalition("dnr_member"));
+        Set<Integer> can_raid = new HashSet<>(getCoalition(Coalition.CAN_RAID));
+        can_raid.addAll(getCoalition(Coalition.ENEMIES));
+        Set<Integer> can_raid_inactive = new HashSet<>(getCoalition("can_raid_inactive"));
+        Map<Integer, Long> dnr_timediff_member = new HashMap<>();
+        Map<Integer, Long> dnr_timediff_app = new HashMap<>();
+
+        if (checkTreaties) {
+            for (int allianceId : getAllianceIds()) {
+                Map<Integer, DBTreaty> treaties = Trocutus.imp().getDB().getTreaties(allianceId);
+                dnr.addAll(treaties.keySet());
+            }
+        }
+
+        if (topX > 0) {
+            DBAlliance t = null;
+            Map<Integer, Double> aas = new RankBuilder<>(Trocutus.imp().getDB().getKingdomsMatching(f -> true)).group(DBKingdom::getAlliance_id).sumValues(f -> (double) f.getScore()).sort().get();
+            for (Map.Entry<Integer, Double> entry : aas.entrySet()) {
+                if (entry.getKey() == 0) continue;
+                if (topX-- <= 0) break;
+                int allianceId = entry.getKey();
+                Map<Integer, DBTreaty> treaties = Trocutus.imp().getDB().getTreaties(allianceId);
+                for (Map.Entry<Integer, DBTreaty> aaTreatyEntry : treaties.entrySet()) {
+                    switch (aaTreatyEntry.getValue().getType()) {
+                        case MDP:
+                            dnr_member.add(aaTreatyEntry.getKey());
+                    }
+                }
+                dnr_member.add(allianceId);
+            }
+        }
+
+        for (Map.Entry<String, Set<Integer>> entry : getCoalitions().entrySet()) {
+            String name = entry.getKey().toLowerCase();
+            if (!name.startsWith("dnr_")) continue;
+
+            String[] split = name.split("_");
+            if (split.length < 2 || split[split.length - 1].isEmpty()) continue;
+            String timeStr = split[split.length - 1];
+            if (!Character.isDigit(timeStr.charAt(0))) continue;
+
+            long time = TimeUtil.timeToSec(timeStr) * 1000L;
+            for (Integer aaId : entry.getValue()) {
+                if (split.length == 3 && split[1].equalsIgnoreCase("member")) {
+                    dnr_timediff_member.put(aaId, time);
+                } else if (true || split[1].equalsIgnoreCase("applicant")) {
+                    dnr_timediff_app.put(aaId, time);
+                }
+
+            }
+        }
+        Set<Integer> enemies = getCoalition("enemies");
+        enemies.addAll(getCoalition(Coalition.CAN_RAID));
+
+        Function<DBKingdom, Boolean> canRaid = new Function<DBKingdom, Boolean>() {
+            @Override
+            public Boolean apply(DBKingdom enemy) {
+                if (enemy.getAlliance_id() == 0) return true;
+                if (can_raid.contains(enemy.getAlliance_id())) return true;
+                if (can_raid_inactive.contains(enemy.getAlliance_id()) && enemy.getActive_m() > 10000) return true;
+                if (enemies.contains(enemy.getAlliance_id())) return true;
+                if (dnr.contains(enemy.getAlliance_id())) return false;
+                if (enemy.getActive_m() < 10000 && dnr_active.contains(enemy.getAlliance_id())) return false;
+                if ((enemy.getActive_m() < 10000 || enemy.getPosition().ordinal() > Rank.APPLICANT.ordinal()) && dnr_member.contains(enemy.getAlliance_id())) return false;
+
+                long requiredInactive = -1;
+
+                {
+                    Long timeDiff = dnr_timediff_app.get(enemy.getAlliance_id());
+                    if (timeDiff != null) {
+                        requiredInactive = enemy.getPosition().ordinal() > Rank.APPLICANT.ordinal() ? Long.MAX_VALUE : timeDiff;
+                    }
+                }
+                if (enemy.getPosition().ordinal() > Rank.APPLICANT.ordinal()) {
+                    Long timeDiff = dnr_timediff_member.get(enemy.getAlliance_id());
+                    if (timeDiff != null) {
+                        requiredInactive = timeDiff;
+                    }
+                }
+
+                long msInactive = enemy.getActive_m() * 60 * 1000L;
+
+                return (msInactive > requiredInactive);
+            }
+        };
+
+        return canRaid;
+    }
+
+    public List<GuildSetting> listInaccessibleChannelKeys() {
+        List<GuildSetting> inaccessible = new ArrayList<>();
+        for (GuildSetting key : GuildKey.values()) {
+            String valueStr = getInfoRaw(key, false);
+            if (valueStr == null) continue;
+            Object value = key.parse(this, valueStr);
+            if (value == null) {
+                inaccessible.add(key);
+                continue;
+            }
+            if (value instanceof GuildMessageChannel) {
+                GuildMessageChannel channel = (GuildMessageChannel) value;
+                if (!channel.canTalk()) {
+                    inaccessible.add(key);
+                }
+            }
+        }
+        return inaccessible;
+    }
+    public void unsetInaccessibleChannels() {
+        for (GuildSetting key : listInaccessibleChannelKeys()) {
+            deleteInfo(key);
+        }
     }
 }

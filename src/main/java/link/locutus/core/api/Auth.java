@@ -1,18 +1,14 @@
 package link.locutus.core.api;
 
 import link.locutus.Trocutus;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.settings.Settings;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.util.FileUtil;
 import link.locutus.util.TrounceUtil;
-import org.apache.commons.lang3.StringEscapeUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
 import java.io.IOException;
 import java.net.CookieManager;
-import java.net.URLDecoder;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 

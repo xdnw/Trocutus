@@ -12,6 +12,9 @@ import link.locutus.command.command.ParametricCallable;
 import link.locutus.command.perm.PermissionHandler;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import org.apache.commons.lang3.StringEscapeUtils;
 
 import java.lang.reflect.Type;
@@ -134,6 +137,47 @@ public class Placeholders<T> {
     public String getCmd(String input) {
         int argStart = input.indexOf('(');
         return argStart != -1 ? input.substring(0, argStart) : input;
+    }
+
+    public String format(String line, int recursion, Function<String, String> formatPlaceholder) {
+        try {
+            int q = 0;
+            List<Integer> indicies = null;
+            for (int i = 0; i < line.length(); i++) {
+                char current = line.charAt(i);
+                if (current == '{') {
+                    if (indicies == null) indicies = new ArrayList<>();
+                    indicies.add(i);
+                    q++;
+                } else if (current == '}' && indicies != null) {
+                    if (q > 0) {
+                        if (recursion < 513) {
+                            q--;
+                            int lastindx = indicies.size() - 1;
+                            int start = indicies.get(lastindx);
+                            String arg = line.substring(start, i + 1);
+
+                            Object result;
+                            try {
+                                result = formatPlaceholder.apply(arg);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                result = null;
+                            }
+                            if (result != null) {
+                                line = new StringBuffer(line).replace(start, i + 1, result + "").toString();
+                            }
+                            indicies.remove(lastindx);
+                            i = start;
+                        }
+                    }
+                }
+            }
+            return line;
+        } catch (Exception e2) {
+            e2.printStackTrace();
+            return "";
+        }
     }
 
     public Map.Entry<Type, Function<T, Object>> getPlaceholderFunction(ValueStore store, String input) {

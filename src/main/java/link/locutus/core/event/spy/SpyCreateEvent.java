@@ -1,7 +1,7 @@
 package link.locutus.core.event.spy;
 
 import link.locutus.Trocutus;
-import link.locutus.core.db.entities.DBSpy;
+import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.event.GuildScopeEvent;
 
 import java.util.concurrent.TimeUnit;

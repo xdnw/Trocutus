@@ -9,8 +9,8 @@ import link.locutus.command.binding.annotation.Me;
 import link.locutus.command.command.CommandCallable;
 import link.locutus.command.command.IMessageIO;
 import link.locutus.command.command.ParameterData;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBRealm;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.util.DiscordUtil;
 import link.locutus.util.GuildShardManager;
@@ -132,7 +132,7 @@ public class DiscordBindings extends BindingHelper {
                     }
                 }
             } else {
-                Set<DBKingdom> kingdoms = DBKingdom.parseList(guild, arg);
+                Set<DBKingdom> kingdoms = DBKingdom.parseList(guild, arg, false);
                 for (Member member : guild.getMembers()) {
                     Map<DBRealm, DBKingdom> userKingdoms = DBKingdom.getFromUser(member.getUser());
                     if (kingdoms == null) continue;

@@ -1,6 +1,5 @@
 package link.locutus.core.db.guild.entities;
 import link.locutus.Trocutus;
-import link.locutus.core.db.entities.DBAlliance;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.key.GuildSetting;

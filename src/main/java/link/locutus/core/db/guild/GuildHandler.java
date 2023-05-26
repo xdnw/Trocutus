@@ -2,22 +2,17 @@ package link.locutus.core.db.guild;
 
 import com.google.common.eventbus.Subscribe;
 import link.locutus.command.impl.discord.DiscordChannelIO;
-import link.locutus.core.db.entities.DBAlliance;
-import link.locutus.core.db.entities.DBAttack;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBSpy;
+import link.locutus.core.db.entities.war.DBAttack;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.event.attack.DefensiveAttackEvent;
 import link.locutus.core.event.attack.OffensiveAttackEvent;
 import link.locutus.core.event.spy.DefensiveSpyEvent;
 import link.locutus.core.event.spy.OffensiveSpyEvent;
 import link.locutus.util.DiscordUtil;
 import link.locutus.util.MathMan;
-import link.locutus.util.TimeUtil;
-import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
-
-import java.util.concurrent.TimeUnit;
 
 public class GuildHandler {
     private final GuildDB db;

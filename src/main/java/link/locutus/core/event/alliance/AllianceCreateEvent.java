@@ -1,6 +1,6 @@
 package link.locutus.core.event.alliance;
 
-import link.locutus.core.db.entities.DBAlliance;
+import link.locutus.core.db.entities.alliance.DBAlliance;
 
 public class AllianceCreateEvent extends AllianceEvent {
 

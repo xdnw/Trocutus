@@ -1,6 +1,7 @@
-package link.locutus.core.db.entities;
+package link.locutus.core.db.entities.alliance;
 
 import link.locutus.Trocutus;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.util.MathMan;
 
 import java.util.Set;

@@ -1,6 +1,6 @@
 package link.locutus.core.event.kingdom;
 
-import link.locutus.core.db.entities.DBKingdom;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.event.Event;
 
 public class KingdomEvent extends Event {

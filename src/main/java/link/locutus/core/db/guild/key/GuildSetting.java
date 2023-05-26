@@ -3,9 +3,9 @@ package link.locutus.core.db.guild.key;
 import com.google.gson.reflect.TypeToken;
 import link.locutus.Trocutus;
 import link.locutus.core.api.alliance.Rank;
-import link.locutus.core.db.entities.DBAlliance;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBRealm;
+import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.command.binding.Key;
@@ -386,14 +386,14 @@ public abstract class GuildSetting<T> {
 
     private void checkRegisteredOwnerOrActiveAlliance(GuildDB db) {
         if (db.isValidAlliance()) {
-            if (!db.getAllianceList().getKingdoms(f -> f.getPosition().ordinal() >= Rank.ADMIN.ordinal() && f.active_m() < 43200).isEmpty()) {
+            if (!db.getAllianceList().getKingdoms(f -> f.getPosition().ordinal() >= Rank.ADMIN.ordinal() && f.getActive_m() < 43200).isEmpty()) {
                 return;
             }
         }
         GuildDB delegate = db.getDelegateServer();
         if (delegate != null) {
             if (delegate.isValidAlliance()) {
-                if (!delegate.getAllianceList().getKingdoms(f -> f.getPosition().ordinal() >= Rank.ADMIN.ordinal() && f.active_m() < 43200).isEmpty()) {
+                if (!delegate.getAllianceList().getKingdoms(f -> f.getPosition().ordinal() >= Rank.ADMIN.ordinal() && f.getActive_m() < 43200).isEmpty()) {
                     return;
                 }
             }
@@ -401,7 +401,7 @@ public abstract class GuildSetting<T> {
         GuildDB faServer = GuildKey.FA_SERVER.getOrNull(db, false);
         if (faServer != null) {
             if (faServer.isValidAlliance()) {
-                if (!faServer.getAllianceList().getKingdoms(f -> f.getPosition().ordinal() >= Rank.ADMIN.ordinal() && f.active_m() < 43200).isEmpty()) {
+                if (!faServer.getAllianceList().getKingdoms(f -> f.getPosition().ordinal() >= Rank.ADMIN.ordinal() && f.getActive_m() < 43200).isEmpty()) {
                     return;
                 }
             }

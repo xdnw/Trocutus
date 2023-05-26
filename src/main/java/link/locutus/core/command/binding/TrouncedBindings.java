@@ -1,17 +1,14 @@
 package link.locutus.core.command.binding;
 
-import link.locutus.Trocutus;
 import link.locutus.command.binding.BindingHelper;
 import link.locutus.command.binding.annotation.Binding;
-import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Me;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.TreatyType;
-import link.locutus.core.db.TrouncedDB;
-import link.locutus.core.db.entities.DBAlliance;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBRealm;
+import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.entities.AutoNickOption;
@@ -21,7 +18,6 @@ import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.db.guild.key.GuildSetting;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.User;
 
 import java.util.Arrays;
 import java.util.List;
@@ -60,7 +56,7 @@ public class TrouncedBindings extends BindingHelper {
 
     @Binding(value = "A comma separated list of kingdoms")
     public Set<DBKingdom> kingdoms(@Me Guild guild, String input) {
-        return DBKingdom.parseList(guild, input);
+        return DBKingdom.parseList(guild, input, false);
     }
 
     @Binding(value = "A comma separated list of alliances")

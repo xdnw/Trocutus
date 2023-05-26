@@ -24,9 +24,10 @@ import link.locutus.command.impl.discord.binding.PermissionBinding;
 import link.locutus.command.impl.discord.binding.SheetBindings;
 import link.locutus.command.perm.PermissionHandler;
 import link.locutus.core.command.binding.TrouncedBindings;
-import link.locutus.core.db.entities.DBAlliance;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBRealm;
+import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBRealm;
+import link.locutus.core.db.entities.kingdom.KingdomPlaceholders;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.key.GuildSetting;
@@ -65,6 +66,8 @@ public class CommandManager extends ListenerAdapter {
     private final ValueStore<Object> store;
     private final ValidatorStore validators;
     private final PermissionHandler permisser;
+    private final KingdomPlaceholders kingdomPlaceholders;
+
     public CommandManager(Trocutus trocutus) {
         this.store = new SimpleValueStore<>();
         new PrimitiveBindings().register(store);
@@ -79,6 +82,8 @@ public class CommandManager extends ListenerAdapter {
         new PermissionBinding().register(permisser);
 
         this.commands = CommandGroup.createRoot(store, validators);
+
+        this.kingdomPlaceholders = new KingdomPlaceholders(store, validators, permisser);
     }
 
     public CommandManager registerCommands() {
@@ -97,6 +102,10 @@ public class CommandManager extends ListenerAdapter {
         this.commands.registerMethod(new BasicCommands(), List.of("mail"), "mail", "send");
         registerSettings();
         return this;
+    }
+
+    public KingdomPlaceholders getKingdomPlaceholders() {
+        return kingdomPlaceholders;
     }
 
     @Override

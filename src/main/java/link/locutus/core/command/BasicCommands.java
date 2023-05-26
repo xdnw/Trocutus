@@ -1,8 +1,6 @@
 package link.locutus.core.command;
 
 import link.locutus.Trocutus;
-import link.locutus.command.binding.Key;
-import link.locutus.command.binding.annotation.Arg;
 import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Default;
 import link.locutus.command.binding.annotation.Me;
@@ -12,26 +10,24 @@ import link.locutus.command.binding.annotation.Timediff;
 import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.command.IMessageIO;
 import link.locutus.command.impl.discord.permission.RolePermission;
-import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.pojo.pages.AllianceMembers;
-import link.locutus.core.db.entities.DBAlliance;
-import link.locutus.core.db.entities.DBAttack;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBRealm;
-import link.locutus.core.db.entities.DBSpy;
+import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.war.DBAttack;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBRealm;
+import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.DiscordUtil;
 import link.locutus.util.MarkupUtil;
 import link.locutus.util.MathMan;
+import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.utils.TimeUtil;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -48,18 +44,20 @@ import java.util.stream.Collectors;
 
 public class BasicCommands {
     private final Map<UUID, Integer> registerIds = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> registerUsers = new ConcurrentHashMap<>();
 
     @Command
     public String register(@Me User user, DBKingdom kingdom, @Default UUID key) throws IOException {
         User existingUser = kingdom.getUser();
-        if (existingUser != null && !existingUser.equals(user)) {
-            throw new IllegalArgumentException("Your kingdom is already registered by: " + existingUser.getAsMention());
+        if (existingUser != null && existingUser.equals(user)) {
+            throw new IllegalArgumentException("Your kingdom is already registered by: " + existingUser.getName());
         }
         if (key == null) {
             UUID uuid = UUID.randomUUID();
             String title = "Copy this command to register your kingdom";
             String message = "/register kingdom:" + kingdom.getId() + " key:" + uuid.toString();
             registerIds.put(uuid, kingdom.getId());
+            registerUsers.put(uuid, user.getIdLong());
 
             Trocutus.imp().rootAuth().sendMail(Settings.INSTANCE.NATION_ID, kingdom, title, message);
 
@@ -67,11 +65,18 @@ public class BasicCommands {
             return "A registration mail was sent to your kingdom in-game: <" + url + ">";
         } else {
             Integer kingdomId = registerIds.remove(key);
+            Long userId = registerUsers.remove(key);
             if (kingdomId == null) {
                 throw new IllegalArgumentException("Invalid key: " + key + " (try again)");
             }
             if (kingdomId != kingdom.getId()) {
                 throw new IllegalArgumentException("Your kingdom: " + kingdom.getName() + " is not the kingdom you are trying to register (" + kingdomId + " != " + kingdom.getId() + ")");
+            }
+            if (userId == null) {
+                throw new IllegalArgumentException("Invalid key: " + key + " (try again) invalid userId");
+            }
+            if (userId != user.getIdLong()) {
+                throw new IllegalArgumentException("Your user id (" + user.getIdLong() + ") does not match who ran the register command: " + userId + " (try again)");
             }
             Trocutus.imp().getDB().saveUser(user.getIdLong(), kingdom);
             return "Registered your kingdom: " + kingdom.getName() + " " + user.getAsMention();
@@ -177,7 +182,7 @@ public class BasicCommands {
             io.create().embed(kingdom.getName(), result.toString()).send();
         } else {
             Set<String> realms = kingdoms.stream().map(k -> k.getRealm().getName()).collect(Collectors.toSet());
-            Set<String> alliances = kingdoms.stream().map(k -> k.getAllianceName()).collect(Collectors.toSet());
+            Map<String, Integer> countByAlliance = kingdoms.stream().collect(Collectors.groupingBy(DBKingdom::getAllianceName, Collectors.summingInt(k -> 1)));
             long total_land = kingdoms.stream().mapToLong(k -> k.getTotal_land()).sum();
             double average_land = kingdoms.stream().mapToLong(k -> k.getTotal_land()).average().orElse(0);
             double average_alert = kingdoms.stream().mapToDouble(k -> k.getAlert_level()).average().orElse(0);
@@ -194,7 +199,7 @@ public class BasicCommands {
 
             result.append("num nations: " + kingdoms.size() + "\n");
             result.append("realms: `" + String.join("`, `", realms) + "`\n");
-            result.append("alliances: `" + String.join("`, `", alliances) + "`\n");
+            result.append("alliances: `" + StringMan.getString(countByAlliance) + "`\n");
             result.append("total land: `" + total_land + "`\n");
             result.append("average land: `" + MathMan.format(average_land) + "`\n");
             result.append("average alert: `" + MathMan.format(average_alert) + "`\n");
@@ -334,18 +339,26 @@ public class BasicCommands {
         }
 
         response.append("\n\n`note: Please use '/spyop' to find suitable kingdoms to spy`");
-        response.append("\n`note: you loot 20% of your opponents unprotected gold");
+        response.append("\n`note: you loot 20% of your opponents unprotected gold`");
         response.append("\n`note: you need 1 more attack than enemy defense to win`");
         return response.toString();
     }
 
     @Command
-    public String spyop(DBRealm realm, @Me Map<DBRealm, DBKingdom> me, int score, @Switch("n") @Default("5") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin) {
+    public String spyop(DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("5") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin) throws IOException {
         DBKingdom myKingdom = me.get(realm);
-        String myName = myKingdom == null ? "__your_name__" : myKingdom.getSlug();
-        // -50% -> 50%
-        double minScore = score * 0.5;
-        double maxScore = score * 1.5;
+        if (myKingdom == null) return "You are not in a kingdom in this realm";
+
+        DBKingdom root = Trocutus.imp().rootAuth().getKingdom(realm.getId());
+        if (root == null) return "Could not find root kingdom";
+        if (root.getAlliance_id() != myKingdom.getAlliance_id()) return "You are not in the same alliance as " + root.getName() + " | " + root.getAllianceName();
+
+        AllianceMembers.AllianceMember memberInfo = Trocutus.imp().getScraper().getAllianceMemberStrength(myKingdom.getRealm_id(), myKingdom.getId());
+        if (memberInfo == null) return "Could not find member info for " + myKingdom.getName();
+
+        int minScore = (int) (myKingdom.getTotal_land() * 0.5);
+        int maxScore = (int) (myKingdom.getTotal_land() * 1.5);
+
         Set<DBKingdom> inRange = realm.getKindoms(f -> f.getTotal_land() >= minScore && f.getTotal_land() <= maxScore);
 
         if (noAlliance) {
@@ -369,7 +382,7 @@ public class BasicCommands {
             }
             long value;
             if (spy == null) {
-                value = Integer.MAX_VALUE + kingdom.getResource_level().ordinal();
+                value = ((long) Integer.MAX_VALUE) + kingdom.getResource_level().ordinal();
             } else {
                 spies.put(kingdom.getId(), spy);
                 DBAttack def = kingdom.getLatestDefensive();
@@ -389,13 +402,13 @@ public class BasicCommands {
 
         StringBuilder response = new StringBuilder();
 
-        response.append("Top " + numResults + " results for " + score + " score:\n");
+        response.append("Top " + numResults + " results for " + myKingdom.getName() + " score:\n");
         for (Map.Entry<DBKingdom, Long> result : results) {
             DBKingdom kingdom = result.getKey();
 
             DBSpy spy = spies.get(kingdom.getId());
             response.append("__**" + kingdom.getName() + " | " + kingdom.getAllianceName() + ":**__ " + kingdom.getTotal_land() + " ns\n");
-            response.append("<" + kingdom.getUrl(myName) + "> ");
+            response.append("<" + kingdom.getUrl(myKingdom.getSlug()) + "> ");
             if (spy != null) {
                 response.append("Spied: " + DiscordUtil.timestamp(spy.date, "R") + " | ");
             }
@@ -404,6 +417,8 @@ public class BasicCommands {
                 response.append("$" + spy.gold + " (total) | $" + spy.protectedGold + " (protected)\n");
                 response.append("Attack Str: " + spy.attack + " | Defense Str: " + spy.defense + "\n");
                 response.append("```" + spy.getUnitMarkdown() + "``` ");
+            } else {
+                response.append("`no spy data`");
             }
             response.append("Resource: `" + kingdom.getResource_level() + "` | Alert: `" + kingdom.getAlert_level() + "`\n\n");
         }

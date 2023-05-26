@@ -2,21 +2,58 @@ package link.locutus.core.command;
 
 import link.locutus.Trocutus;
 import link.locutus.command.binding.annotation.Command;
+import link.locutus.command.binding.annotation.Switch;
 import link.locutus.command.impl.discord.permission.RolePermission;
-import link.locutus.core.api.ScrapeKingdomUpdater;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBRealm;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBRealm;
+import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
+import link.locutus.core.db.guild.key.GuildSetting;
+import link.locutus.util.StringMan;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class AdminCommands {
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
+    public String deleteAllInaccessibleChannels(@Switch("f") boolean force) {
+        Map<GuildDB, List<GuildSetting>> toUnset = new LinkedHashMap<>();
+
+        for (GuildDB db : Trocutus.imp().getGuildDatabases().values()) {
+            if (force) {
+                List<GuildSetting> keys = db.listInaccessibleChannelKeys();
+                if (!keys.isEmpty()) {
+                    toUnset.put(db, keys);
+                }
+            } else {
+                db.unsetInaccessibleChannels();
+            }
+        }
+
+        if (toUnset.isEmpty()) {
+            return "No keys to unset";
+        }
+        StringBuilder response = new StringBuilder();
+        for (Map.Entry<GuildDB, List<GuildSetting>> entry : toUnset.entrySet()) {
+            response.append(entry.getKey().getGuild().toString() + ":\n");
+            List<String> keys = entry.getValue().stream().map(f -> f.name()).collect(Collectors.toList());
+            response.append("- " + StringMan.join(keys, "\n- "));
+            response.append("\n");
+        }
+        String footer = "Rerun the command with `-f` to confirm";
+        return response + footer;
+    }
+
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
+    public void stop(boolean save) {
+        Trocutus.imp().stop();
+    }
+
     @RolePermission(value = Roles.ADMIN, root = true)
     @Command
     public String sync(int realm, String name) throws IOException {

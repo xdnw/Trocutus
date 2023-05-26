@@ -12,7 +12,7 @@ import link.locutus.command.impl.discord.permission.NotGuild;
 import link.locutus.command.impl.discord.permission.RankPermission;
 import link.locutus.command.impl.discord.permission.RolePermission;
 import link.locutus.command.impl.discord.permission.WhitelistPermission;
-import link.locutus.core.db.entities.DBKingdom;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.entities.Coalition;

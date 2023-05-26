@@ -1,7 +1,7 @@
 package link.locutus.core.event.spy;
 
 import link.locutus.Trocutus;
-import link.locutus.core.db.entities.DBSpy;
+import link.locutus.core.db.entities.spells.DBSpy;
 
 public class OffensiveSpyEvent extends SpyCreateEvent {
     public OffensiveSpyEvent(DBSpy attack) {

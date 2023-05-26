@@ -5,11 +5,11 @@ import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.TrouncedApi;
 import link.locutus.core.api.ScrapeKingdomUpdater;
-import link.locutus.core.api.pojo.Api;
 import link.locutus.core.command.CommandManager;
 import link.locutus.core.command.TrouncedSlash;
 import link.locutus.core.db.TrouncedDB;
-import link.locutus.core.db.entities.DBKingdom;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.kingdom.KingdomPlaceholders;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.event.Event;
@@ -17,6 +17,7 @@ import link.locutus.core.event.MainListener;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.GuildShardManager;
 import link.locutus.util.RateLimitUtil;
+import link.locutus.util.StringMan;
 import link.locutus.util.scheduler.CaughtRunnable;
 import link.locutus.util.scheduler.ThrowingConsumer;
 import net.dv8tion.jda.api.JDA;
@@ -33,14 +34,12 @@ import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -201,10 +200,6 @@ public class Trocutus extends ListenerAdapter {
                 Settings.INSTANCE.APPLICATION_ID = appId;
             }
 
-            if (this.slashCommands != null) {
-                this.slashCommands.setupCommands();
-            }
-
             this.server = manager.getGuildById(Settings.INSTANCE.ROOT_SERVER);
 
             if (Settings.INSTANCE.ENABLED_COMPONENTS.CREATE_DATABASES_ON_STARTUP) {
@@ -237,6 +232,10 @@ public class Trocutus extends ListenerAdapter {
                         }
                     }
                 }
+            }
+
+            if (this.slashCommands != null) {
+                this.slashCommands.setupCommands();
             }
         }
     }
@@ -368,5 +367,42 @@ public class Trocutus extends ListenerAdapter {
 
     public ScrapeKingdomUpdater getScraper() {
         return scraper;
+    }
+
+    public TrouncedSlash getSlashCommands() {
+        return slashCommands;
+    }
+
+    public void stop() {
+        synchronized (this)
+        {
+
+            for (JDA api : getDiscordApi().getApis()) {
+                api.shutdownNow();
+            }
+
+            executor.shutdownNow();
+            scheduler.shutdownNow();
+
+            // join all threads
+            for (Thread thread : Thread.getAllStackTraces().keySet()) {
+                if (thread != Thread.currentThread()) {
+                    try {
+                        thread.interrupt();
+                    } catch (SecurityException ignore) {}
+                }
+            }
+
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {}
+
+            System.out.println("\n == Ignore the following if the thread doesn't relate to anything modifying persistent data");
+            for (Map.Entry<Thread, StackTraceElement[]> thread : Thread.getAllStackTraces().entrySet()) {
+                System.out.println("Thread did not close after 5s: " + thread.getKey() + "\n- " + StringMan.stacktraceToString(thread.getValue()));
+            }
+
+            System.exit(1);
+        }
     }
 }

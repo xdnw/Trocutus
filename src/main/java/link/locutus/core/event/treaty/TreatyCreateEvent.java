@@ -1,6 +1,6 @@
 package link.locutus.core.event.treaty;
 
-import link.locutus.core.db.entities.DBTreaty;
+import link.locutus.core.db.entities.alliance.DBTreaty;
 
 public class TreatyCreateEvent extends TreatyEvent {
     public TreatyCreateEvent(DBTreaty treaty) {

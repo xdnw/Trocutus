@@ -14,12 +14,12 @@ import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.TreatyType;
 import link.locutus.core.api.pojo.Api;
-import link.locutus.core.db.entities.DBAlliance;
-import link.locutus.core.db.entities.DBAttack;
-import link.locutus.core.db.entities.DBKingdom;
-import link.locutus.core.db.entities.DBRealm;
-import link.locutus.core.db.entities.DBSpy;
-import link.locutus.core.db.entities.DBTreaty;
+import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.war.DBAttack;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.alliance.DBRealm;
+import link.locutus.core.db.entities.spells.DBSpy;
+import link.locutus.core.db.entities.alliance.DBTreaty;
 import link.locutus.core.event.alliance.AllianceCreateEvent;
 import link.locutus.core.event.alliance.AllianceDeleteEvent;
 import link.locutus.core.event.alliance.AllianceUpdateEvent;
@@ -1054,5 +1054,15 @@ public class TrouncedDB extends DBMain {
             }
         }
         return latest;
+    }
+
+    public Map<Integer, DBTreaty> getTreaties(int allianceId) {
+        DBAlliance aa = DBAlliance.get(allianceId);
+        if (aa == null) return Collections.emptyMap();
+        return getTreaties(aa.getRealm_id(), allianceId);
+    }
+
+    public Map<Integer, DBTreaty> getTreaties(int realm, int allianceId) {
+        return treatiesByAlliance.getOrDefault(realm, Collections.emptyMap()).getOrDefault(allianceId, Collections.emptyMap());
     }
 }

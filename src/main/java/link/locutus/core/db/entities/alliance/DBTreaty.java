@@ -1,4 +1,4 @@
-package link.locutus.core.db.entities;
+package link.locutus.core.db.entities.alliance;
 
 import link.locutus.core.api.game.TreatyType;
 
