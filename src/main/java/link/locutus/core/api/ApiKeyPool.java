@@ -102,7 +102,7 @@ public class ApiKeyPool {
         }
 
 
-        public int getNationId() {
+        public int getKingdomId() {
             if (nationId == -1) {
                 nationId = Trocutus.imp().getDB().getKingdomFromApiKey(key);
             }

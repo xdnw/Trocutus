@@ -39,7 +39,7 @@ public class TrouncedApi {
         return kingdoms;
     }
 
-    private Api.Kingdom fetchData(ApiKeyPool.ApiKey key) throws IOException {
+    public Api.Kingdom fetchData(ApiKeyPool.ApiKey key) throws IOException {
         String urlFull = url + "?token=" + key.getKey();
 
         String content = FileUtil.readStringFromURL(urlFull);

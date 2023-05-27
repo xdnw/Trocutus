@@ -158,27 +158,7 @@ public class BasicCommands {
 
             DBKingdom myKingdom = me.get(realm);
             String myName = myKingdom != null ? myKingdom.getSlug() : "__your_name__";
-            String url = kingdom.getUrl(myName);
-            result.append("<" + url + ">\n");
-
-            User user = kingdom.getUser();
-            if (user != null) {
-                result.append("user: " + user.getAsMention() + "\n");
-            }
-            result.append("id: `" + kingdom.getId() + "`\n");
-            result.append("realm: `" + realm.getName() + "`\n");
-            result.append("alliance: `" + kingdom.getAllianceName() + "`\n");
-            result.append("position: `" + kingdom.getPosition() + "`\n");
-            result.append("total land: `" + kingdom.getTotal_land() + "`\n");
-            result.append("alert level: `" + kingdom.getAlert_level() + "`\n");
-            result.append("resource level: `" + kingdom.getResource_level() + "`\n");
-            result.append("spell alert: `" + kingdom.getSpell_alert() + "`\n");
-            result.append("last active: " + DiscordUtil.timestamp(kingdom.getLast_active(), "R") + "\n");
-            result.append("vacation start: " + DiscordUtil.timestamp(kingdom.getVacation_start(), "d") + "\n");
-            result.append("hero: `" + kingdom.getHero() + "`\n");
-            result.append("hero level: `" + kingdom.getHero_level() + "`\n");
-            result.append("last fetched: " + DiscordUtil.timestamp(kingdom.getLast_fetched(), "R") + "\n");
-
+            result.append(kingdom.toMarkdown(myName, true));
             io.create().embed(kingdom.getName(), result.toString()).send();
         } else {
             Set<String> realms = kingdoms.stream().map(k -> k.getRealm().getName()).collect(Collectors.toSet());

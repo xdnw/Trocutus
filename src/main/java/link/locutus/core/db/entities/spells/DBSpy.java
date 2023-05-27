@@ -1,9 +1,16 @@
 package link.locutus.core.db.entities.spells;
 
+import link.locutus.core.api.game.AttackOrSpell;
+import link.locutus.core.api.game.AttackOrSpellType;
+import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.pojo.pages.SpyInteraction;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 
-public class DBSpy {
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+public class DBSpy implements AttackOrSpell {
     public final int id;
     public final int attacker_id;
     public final int attacker_aa;
@@ -75,5 +82,44 @@ public class DBSpy {
                 .append(String.format("%5s", archers)).append(" " + cavalryChar).append(" | ")
                 .append(String.format("%4s", elites)).append(" " + eliteChar);
         return body.toString();
+    }
+
+    @Override
+    public int getId() {
+        return id;
+    }
+
+    @Override
+    public int getAttacker_id() {
+        return attacker_id;
+    }
+
+    @Override
+    public int getDefender_id() {
+        return defender_id;
+    }
+
+    @Override
+    public int getAttacker_aa() {
+        return attacker_aa;
+    }
+
+    @Override
+    public int getDefender_aa() {
+        return defender_aa;
+    }
+
+    @Override
+    public Map<MilitaryUnit, Long> getCost(boolean isAttacker) {
+        if (!isAttacker) return Collections.emptyMap();
+        Map<MilitaryUnit, Long> result = new HashMap<>();
+        result.put(MilitaryUnit.MANA, 200L);
+        result.put(MilitaryUnit.EXP, -10L);
+        return result;
+    }
+
+    @Override
+    public AttackOrSpellType getType() {
+        return AttackOrSpellType.SPY;
     }
 }

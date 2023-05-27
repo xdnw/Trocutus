@@ -1,5 +1,6 @@
 package link.locutus.core.db.guild;
 
+import com.google.gson.reflect.TypeToken;
 import link.locutus.Trocutus;
 import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Me;
@@ -13,6 +14,7 @@ import link.locutus.core.db.guild.entities.AutoRoleOption;
 import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.db.guild.key.GuildBooleanSetting;
+import link.locutus.core.db.guild.key.GuildCategorySetting;
 import link.locutus.core.db.guild.key.GuildChannelSetting;
 import link.locutus.core.db.guild.key.GuildEnumSetSetting;
 import link.locutus.core.db.guild.key.GuildEnumSetting;
@@ -24,20 +26,26 @@ import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Invite;
 import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.concrete.Category;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class GuildKey {
@@ -93,8 +101,8 @@ public class GuildKey {
                 }
                 GuildDB otherDb = alliance.getGuildDB();
                 Member owner = db.getGuild().getOwner();
-                DBKingdom ownerNation = DBKingdom.getFromUser(owner.getUser(), alliance.getRealm());
-                if (ownerNation == null || ownerNation.getAlliance_id() != aaId || ownerNation.getPosition().ordinal() < Rank.FOUNDER.ordinal()) {
+                DBKingdom ownerKingdom = DBKingdom.getFromUser(owner.getUser(), alliance.getRealm());
+                if (ownerKingdom == null || ownerKingdom.getAlliance_id() != aaId || ownerKingdom.getPosition().ordinal() < Rank.FOUNDER.ordinal()) {
                     Set<String> inviteCodes = new HashSet<>();
                     boolean isValid = Roles.ADMIN.hasOnRoot(owner.getUser());
                     try {
@@ -482,6 +490,125 @@ public class GuildKey {
         }
     }.setupRequirements(f -> f.requireValidAlliance());
 
+    public static GuildSetting<Category> EMBASSY_CATEGORY = new GuildCategorySetting(GuildSettingCategory.FOREIGN_AFFAIRS) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String EMBASSY_CATEGORY(@Me GuildDB db, @Me User user, Category category) {
+            return EMBASSY_CATEGORY.setAndValidate(db, user, category);
+        }
+        @Override
+        public String help() {
+            return "The name or id of the CATEGORY you would like embassy channels created in (for " + "CM.embassy.cmd.toSlashMention()" + ")";
+        }
+    }.setupRequirements(f -> f.requireFunction(new Consumer<GuildDB>() {
+        @Override
+        public void accept(GuildDB db) {
+            if (ALLIANCE_ID.getOrNull(db, true) == null) {
+                for (GuildDB otherDb : Trocutus.imp().getGuildDatabases().values()) {
+                    GuildDB faServer = FA_SERVER.getOrNull(otherDb, false);
+                    if (faServer != null && faServer.getIdLong() == db.getIdLong()) {
+                        return;
+                    }
+                }
+                throw new IllegalArgumentException("Missing required setting " + ALLIANCE_ID.name() + " " + ALLIANCE_ID.getCommandMention() + "\n" +
+                        "(Or set this server as an " + FA_SERVER.name() + " from another guild)");
+
+            }
+        }
+    }));
+
+    public static GuildSetting<Map<Role, Set<Role>>> ASSIGNABLE_ROLES = new GuildSetting<Map<Role, Set<Role>>>(GuildSettingCategory.ROLE, Map.class, Role.class, TypeToken.getParameterized(Set.class, Role.class).getType()) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String addAssignableRole(@Me GuildDB db, @Me User user, Role role, Set<Role> roles) {
+            Map<Role, Set<Role>> existing = ASSIGNABLE_ROLES.getOrNull(db, false);
+            existing = existing == null ? new HashMap<>() : new LinkedHashMap<>(existing);
+            existing.put(role, roles);
+            return ASSIGNABLE_ROLES.setAndValidate(db, user, existing);
+        }
+
+
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String ASSIGNABLE_ROLES(@Me GuildDB db, @Me User user, Map<Role, Set<Role>> value) {
+            return ASSIGNABLE_ROLES.setAndValidate(db, user, value);
+        }
+
+        @Override
+        public String toReadableString(Map<Role, Set<Role>> map) {
+            List<String> lines = new ArrayList<>();
+            for (Map.Entry<Role, Set<Role>> entry : map.entrySet()) {
+                String key = entry.getKey().getName();
+                List<String> valueStrings = entry.getValue().stream().map(f -> f.getName()).collect(Collectors.toList());
+                String value = StringMan.join(valueStrings, ",");
+
+                lines.add(key + ":" + value);
+            }
+            return StringMan.join(lines, "\n");
+        }
+
+        public String toString(Map<Role, Set<Role>> map) {
+            List<String> lines = new ArrayList<>();
+            for (Map.Entry<Role, Set<Role>> entry : map.entrySet()) {
+                String key = entry.getKey().getAsMention();
+                List<String> valueStrings = entry.getValue().stream().map(f -> f.getAsMention()).collect(Collectors.toList());
+                String value = StringMan.join(valueStrings, ",");
+
+                lines.add(key + ":" + value);
+            }
+            return StringMan.join(lines, "\n");
+        }
+
+        @Override
+        public String help() {
+            return "Map roles that can be assigned (or removed). See `";// + CM.self.create.cmd.toSlashMention() + "` " + CM.role.removeAssignableRole.cmd.toSlashMention() + " " + CM.role.add.cmd.toSlashMention() + " " + CM.role.remove.cmd.toSlashMention();
+        }
+    };
+
+    public static GuildSetting<MessageChannel> INTERVIEW_INFO_SPAM = new GuildChannelSetting(GuildSettingCategory.INTERVIEW) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String INTERVIEW_INFO_SPAM(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return INTERVIEW_INFO_SPAM.setAndValidate(db, user, channel);
+        }
+        @Override
+        public String help() {
+            return "The channel to receive info spam about expired interview channels";
+        }
+    }.setupRequirements(f -> f.requireValidAlliance());
+
+    public static GuildSetting<MessageChannel> INTERVIEW_PENDING_ALERTS = new GuildChannelSetting(GuildSettingCategory.INTERVIEW) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String INTERVIEW_PENDING_ALERTS(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return INTERVIEW_PENDING_ALERTS.setAndValidate(db, user, channel);
+        }
+        @Override
+        public String help() {
+            return "The channel to receive alerts when a member requests an interview";
+        }
+    }.setupRequirements(f -> f.requireValidAlliance().requireFunction(db -> {
+        Role interviewerRole = Roles.INTERVIEWER.toRole(db.getGuild());
+        if (interviewerRole == null) interviewerRole = Roles.MENTOR.toRole(db.getGuild());
+        if (interviewerRole == null) interviewerRole = Roles.INTERNAL_AFFAIRS_STAFF.toRole(db.getGuild());
+        if (interviewerRole == null) interviewerRole = Roles.INTERNAL_AFFAIRS.toRole(db.getGuild());
+        if (interviewerRole == null) {
+            throw new IllegalArgumentException("Please use: " + "CM.role.setAlias.cmd.toSlashMention()" + " to set at least ONE of the following:\n" +
+                    StringMan.join(Arrays.asList(Roles.INTERVIEWER, Roles.MENTOR, Roles.INTERNAL_AFFAIRS_STAFF, Roles.INTERNAL_AFFAIRS), ", "));
+        }
+    }));
+    public static GuildSetting<Category> ARCHIVE_CATEGORY = new GuildCategorySetting(GuildSettingCategory.INTERVIEW) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String ARCHIVE_CATEGORY(@Me GuildDB db, @Me User user, Category category) {
+            return ARCHIVE_CATEGORY.setAndValidate(db, user, category);
+        }
+        @Override
+        public String help() {
+            return "The name or id of the CATEGORY you would like " + "CM.channel.close.current.cmd.toSlashMention()" + " to move channels to";
+        }
+    }.setupRequirements(f -> f.requireValidAlliance().requires(INTERVIEW_PENDING_ALERTS));
+
     private static final Map<String, GuildSetting> BY_NAME = new HashMap<>();
 
     static {
@@ -498,6 +625,7 @@ public class GuildKey {
             }
         }
     }
+
 
     public static GuildSetting[] values() {
         return BY_NAME.values().toArray(new GuildSetting[0]);

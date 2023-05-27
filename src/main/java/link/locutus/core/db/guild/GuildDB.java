@@ -3,23 +3,41 @@ package link.locutus.core.db.guild;
 import com.google.common.eventbus.AsyncEventBus;
 import com.google.common.eventbus.EventBus;
 import link.locutus.Trocutus;
+import link.locutus.core.api.Auth;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.DBMain;
 import link.locutus.core.db.entities.alliance.AllianceList;
 import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.alliance.DBRealm;
+import link.locutus.core.db.entities.guild.Announcement;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBTreaty;
+import link.locutus.core.db.entities.kingdom.KingdomMeta;
+import link.locutus.core.db.entities.kingdom.KingdomOrAllianceOrGuild;
 import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.core.db.guild.entities.Roles;
+import link.locutus.core.db.guild.entities.UnmaskedReason;
+import link.locutus.core.db.guild.interview.IACategory;
 import link.locutus.core.db.guild.key.GuildSetting;
+import link.locutus.core.db.guild.role.AutoRoleTask;
+import link.locutus.core.db.guild.role.IAutoRoleTask;
 import link.locutus.core.settings.Settings;
+import link.locutus.util.DiscordUtil;
+import link.locutus.util.RateLimitUtil;
+import link.locutus.util.StringMan;
 import link.locutus.util.TimeUtil;
 import link.locutus.util.builder.RankBuilder;
 import link.locutus.util.scheduler.ThrowingConsumer;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Invite;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.concrete.Category;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 
+import javax.annotation.Nullable;
+import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -28,16 +46,20 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-public class GuildDB extends DBMain {
+public class GuildDB extends DBMain implements KingdomOrAllianceOrGuild {
     public static GuildDB get(Guild guild) {
         return Trocutus.imp().getGuildDB(guild);
     }
@@ -59,6 +81,7 @@ public class GuildDB extends DBMain {
 
     private volatile boolean cachedRoleAliases = false;
     private final Map<Roles, Map<Long, Long>> roleToAccountToDiscord;
+    private IACategory iaCat;
 
 
     public GuildDB(Guild guild) throws SQLException {
@@ -99,6 +122,13 @@ public class GuildDB extends DBMain {
                 e.printStackTrace();
             }
         };
+        {
+            String query = "CREATE TABLE IF NOT EXISTS `ANNOUNCEMENTS2` (`ann_id` INTEGER PRIMARY KEY AUTOINCREMENT, `sender` BIGINT NOT NULL, `active` BOOLEAN NOT NULL, `title` VARCHAR NOT NULL, `content` VARCHAR NOT NULL, `replacements` VARCHAR NOT NULL, `filter` VARCHAR NOT NULL, `date` BIGINT NOT NULL)";
+            executeStmt(query);
+
+            String query2 = "CREATE TABLE IF NOT EXISTS `ANNOUNCEMENTS_PLAYER2` (`receiver` INT NOT NULL, `ann_id` INT NOT NULL, `active` BOOLEAN NOT NULL, `diff` BLOB NOT NULL, PRIMARY KEY(receiver, ann_id), FOREIGN KEY(ann_id) REFERENCES ANNOUNCEMENTS2(ann_id))";
+            executeStmt(query2);
+        }
     }
 
     public Guild getGuild() {
@@ -111,6 +141,17 @@ public class GuildDB extends DBMain {
 
     public String getName() {
         return guild.getName();
+    }
+
+    @Override
+    public String getUrl(String slug) {
+        List<Invite> invites = RateLimitUtil.complete(guild.retrieveInvites());
+        for (Invite invite : invites) {
+            if (invite.getMaxUses() == 0) {
+                return invite.getUrl();
+            }
+        }
+        return null;
     }
 
     private EventBus eventBus = null;
@@ -722,5 +763,456 @@ public class GuildDB extends DBMain {
         for (GuildSetting key : listInaccessibleChannelKeys()) {
             deleteInfo(key);
         }
+    }
+
+
+    public int addAnnouncement(User sender, String title, String content, String replacements, String filter) {
+        String query = "INSERT INTO `ANNOUNCEMENTS2`(`sender`, `active`, `title`, `content`, `replacements`, `filter`, `date`) VALUES(?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement stmt = getConnection().prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setLong(1, sender.getIdLong());
+            stmt.setBoolean(2, true);
+            stmt.setString(3, title);
+            stmt.setString(4, content);
+            stmt.setString(5, replacements);
+            stmt.setString(6, filter);
+            stmt.setLong(7, System.currentTimeMillis());
+            stmt.executeUpdate();
+
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    int id = generatedKeys.getInt(1);
+                    return id;
+                }
+            }
+            throw new IllegalArgumentException("Error creating announcement");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void addPlayerAnnouncement(DBKingdom receiver, int annId, byte[] diff) {
+        String query = "INSERT INTO ANNOUNCEMENTS_PLAYER2(`receiver`, `ann_id`, `active`, `diff`) VALUES(?, ?, ?, ?)";
+        update(query , (ThrowingConsumer<PreparedStatement>) stmt -> {
+            stmt.setInt(1, receiver.getId());
+            stmt.setInt(2, annId);
+            stmt.setBoolean(3, true);
+            stmt.setBytes(4, diff);
+        });
+    }
+
+    public List<Announcement> getAnnouncements() {
+        List<Announcement> result = new ArrayList<>();
+        try (PreparedStatement stmt = prepareQuery("select * FROM ANNOUNCEMENTS2 ORDER BY date desc")) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new Announcement(rs));
+                }
+            }
+            return result;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Announcement getAnnouncement(int ann_id) {
+        List<Announcement> result = new ArrayList<>();
+        query("select * FROM ANNOUNCEMENTS2 WHERE ann_id = ? ORDER BY date desc",
+                (ThrowingConsumer<PreparedStatement>) stmt -> stmt.setInt(1, ann_id),
+                (ThrowingConsumer<ResultSet>) rs -> {
+                    while (rs.next()) {
+                        result.add(new Announcement(rs));
+                    }
+                });
+        return result.isEmpty() ? null : result.get(0);
+    }
+
+    public Map<Integer, Announcement> getAnnouncementsByIds(Set<Integer> ids) {
+        Map<Integer, Announcement> result = new LinkedHashMap<>();
+        query("select * FROM ANNOUNCEMENTS2 WHERE ann_id in " + StringMan.getString(ids) + " ORDER BY date desc",
+                f -> {},
+                (ThrowingConsumer<ResultSet>) rs -> {
+                    while (rs.next()) {
+                        Announcement ann = new Announcement(rs);
+                        result.put(ann.id, ann);
+                    }
+                });
+        return result;
+    }
+
+    public void setAnnouncementActive(int ann_id, boolean value) {
+        update("UPDATE ANNOUNCEMENTS2 SET active = ? WHERE ann_id = ?", new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setBoolean(1, value);
+                stmt.setInt(2, ann_id);
+            }
+        });
+    }
+
+    public void setAnnouncementActive(int ann_id, int nation_id, boolean active) {
+        update("UPDATE ANNOUNCEMENTS_PLAYER2 SET active = ? WHERE ann_id = ? AND receiver = ?", new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setBoolean(1, active);
+                stmt.setInt(2, ann_id);
+                stmt.setInt(3, nation_id);
+            }
+        });
+    }
+
+    public Map<Announcement, List<Announcement.PlayerAnnouncement>> getAllPlayerAnnouncements(boolean allowArchived) {
+        List<Announcement> announcements = getAnnouncements();
+        Map<Integer, Announcement> announcementsById = new LinkedHashMap<>();
+        for (Announcement announcement : announcements) {
+            if (!announcement.active && !allowArchived) continue;
+            announcementsById.put(announcement.id, announcement);
+        }
+
+        Map<Announcement, List<Announcement.PlayerAnnouncement>> result = new LinkedHashMap<>();
+        query("select * FROM ANNOUNCEMENTS_PLAYER2 ORDER BY ann_id desc",
+                f -> {},
+                (ThrowingConsumer<ResultSet>) rs -> {
+                    while (rs.next()) {
+                        int annId = rs.getInt("ann_id");
+                        Announcement announcement = announcementsById.get(annId);
+                        if (announcement == null) continue;
+                        Announcement.PlayerAnnouncement plrAnn = new Announcement.PlayerAnnouncement(this, announcement, rs);
+                        if (!allowArchived && !plrAnn.active) continue;
+                        result.computeIfAbsent(announcement, f -> new ArrayList<>()).add(plrAnn);
+                    }
+                });
+        return result;
+    }
+
+    public List<Announcement.PlayerAnnouncement> getPlayerAnnouncementsByAnnId(int ann_id) {
+        Announcement announcement = getAnnouncement(ann_id);
+        if (announcement == null) return null;
+        List<Announcement.PlayerAnnouncement> result = new ArrayList<>();
+        query("select * FROM ANNOUNCEMENTS_PLAYER2 WHERE ann_id = ? ORDER BY ann_id desc",
+                (ThrowingConsumer<PreparedStatement>) stmt -> stmt.setInt(1, ann_id),
+                (ThrowingConsumer<ResultSet>) rs -> {
+                    while (rs.next()) {
+                        result.add(new Announcement.PlayerAnnouncement(this, announcement, rs));
+                    }
+                });
+        return result;
+    }
+
+    public List<Announcement.PlayerAnnouncement> getPlayerAnnouncementsByKingdom(int nationId, boolean requireActive) {
+        List<Announcement.PlayerAnnouncement> result = new ArrayList<>();
+        query("select * FROM ANNOUNCEMENTS_PLAYER2 WHERE receiver = ?" + (requireActive ? " AND `active` = true" : "") + " ORDER BY ann_id desc",
+                (ThrowingConsumer<PreparedStatement>) stmt -> stmt.setInt(1, nationId),
+                (ThrowingConsumer<ResultSet>) rs -> {
+                    while (rs.next()) {
+                        result.add(new Announcement.PlayerAnnouncement(this, rs));
+                    }
+                });
+        Set<Integer> annIds = result.stream().map(f -> f.ann_id).collect(Collectors.toSet());
+        Map<Integer, Announcement> announcements = getAnnouncementsByIds(annIds);
+        Iterator<Announcement.PlayerAnnouncement> iter = result.iterator();
+        while (iter.hasNext()) {
+            Announcement.PlayerAnnouncement plrAnn = iter.next();
+            Announcement announcement = announcements.get(plrAnn.ann_id);
+            if (announcement != null && (announcement.active || !requireActive)) {
+                plrAnn.setParent(announcement);
+            } else if (requireActive) {
+                iter.remove();
+            }
+        }
+        return result;
+    }
+
+    public Auth getMailAuth() {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    public boolean isAllianceId(int id) {
+        return getAllianceIds().contains(id);
+    }
+
+    public void addCoalition(long allianceId, Coalition coalition) {
+        addCoalition(allianceId, coalition.name().toLowerCase());
+    }
+
+    public void addCoalition(long allianceId, String coalition) {
+        GuildDB faServer = getOrNull(GuildKey.FA_SERVER);
+        if (faServer != null && faServer.getIdLong() != getIdLong()) {
+            faServer.addCoalition(allianceId, coalition);
+            return;
+        }
+        {
+            loadCoalitions();
+            if (coalitions == null) coalitions = new ConcurrentHashMap<>();
+            coalitions.computeIfAbsent(coalition.toLowerCase(), f -> new LinkedHashSet<>()).add((long) allianceId);
+
+            update("INSERT OR IGNORE INTO `COALITIONS`(`alliance_id`, `coalition`) VALUES(?, ?)", (ThrowingConsumer<PreparedStatement>) stmt -> {
+                stmt.setLong(1, allianceId);
+                stmt.setString(2, coalition.toLowerCase());
+            });
+        }
+    }
+
+    public void removeCoalition(long allianceId, Coalition coalition) {
+        removeCoalition(allianceId, coalition.name().toLowerCase());
+    }
+
+    public void removeCoalition(long allianceId, String coalition) {
+        GuildDB faServer = getOrNull(GuildKey.FA_SERVER);
+        if (faServer != null && faServer.getIdLong() != getIdLong()) {
+            faServer.removeCoalition(allianceId, coalition);
+            return;
+        }
+        {
+            Set<Long> set = coalitions.getOrDefault(coalition, Collections.emptySet());
+            if (set != null) set.remove(allianceId);
+            update("DELETE FROM `COALITIONS` WHERE `alliance_id` = ? AND LOWER(coalition) = LOWER(?)", (ThrowingConsumer<PreparedStatement>) stmt -> {
+                stmt.setLong(1, allianceId);
+                stmt.setString(2, coalition.toLowerCase());
+            });
+        }
+    }
+
+    public IAutoRoleTask getAutoRoleTask() {
+        if (this.autoRoleTask == null) {
+            synchronized (this) {
+                if (this.autoRoleTask == null) {
+                    this.autoRoleTask = new AutoRoleTask(getGuild(), this);
+                }
+            }
+        }
+        return autoRoleTask;
+    }
+
+    public Set<Integer> getAllies(boolean fetchTreaties) {
+        Set<Integer> allies = getCoalition(Coalition.ALLIES);
+        Set<Integer> aaIds = getAllianceIds();
+        if (!aaIds.isEmpty()) {
+            allies.addAll(aaIds);
+            if (fetchTreaties) {
+                for (DBAlliance alliance : getAlliances()) {
+                    for (Map.Entry<Integer, DBTreaty> entry : alliance.getTreaties().entrySet()) {
+                        switch (entry.getValue().getType()) {
+                            case MDP:
+                                allies.add(entry.getKey());
+                        }
+                    }
+                }
+            }
+        }
+        return allies;
+    }
+
+    public synchronized IACategory getExistingIACategory() {
+        return iaCat;
+    }
+
+    public synchronized IACategory getIACategory() {
+        return getIACategory(false, true, false);
+    }
+    public synchronized IACategory getIACategory(boolean create, boolean allowDelegate, boolean throwError) {
+        GuildDB delegate = allowDelegate ? getDelegateServer() : null;
+        if (delegate != null && delegate.iaCat != null) {
+            return delegate.iaCat;
+        }
+        if (this.iaCat == null) {
+            boolean hasInterview = false;
+            for (Category category : guild.getCategories()) {
+                if (category.getName().toLowerCase().startsWith("interview")) {
+                    hasInterview = true;
+                }
+            }
+
+            if (hasInterview) {
+                this.iaCat = new IACategory(this);
+                this.iaCat.load();
+            }
+        }
+        if (iaCat == null && delegate != null) {
+            iaCat = delegate.getIACategory(false, false, throwError);
+        }
+        if (iaCat == null && create) {
+            Category category = RateLimitUtil.complete(guild.createCategory("interview"));
+            this.iaCat = new IACategory(this);
+            this.iaCat.load();
+        }
+        if (iaCat == null && throwError) {
+            throw new IllegalStateException("No `interview` category found");
+        }
+        return this.iaCat;
+    }
+
+    public void setMeta(long userId, KingdomMeta key, byte[] value) {
+        GuildDB delegate = getDelegateServer();
+        if (delegate != null) {
+            delegate.setMeta(userId, key, value);
+            return;
+        }
+        checkNotNull(key);
+        checkNotNull(value);
+        update("INSERT OR REPLACE INTO `NATION_META`(`id`, `key`, `meta`) VALUES(?, ?, ?)", (ThrowingConsumer<PreparedStatement>) stmt -> {
+            stmt.setLong(1, userId);
+            stmt.setInt(2, key.ordinal());
+            stmt.setBytes(3, value);
+        });
+    }
+
+    public Map<DBKingdom, byte[]> getKingdomMetaMap(KingdomMeta key) {
+        GuildDB delegate = getDelegateServer();
+        if (delegate != null) {
+            return delegate.getKingdomMetaMap(key);
+        }
+        Map<DBKingdom, byte[]> result = new HashMap<>();
+        try (PreparedStatement stmt = prepareQuery("select * FROM NATION_META where key = ?")) {
+            stmt.setInt(1, key.ordinal());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    long nationId = rs.getInt("id");
+                    if (nationId < Integer.MAX_VALUE) {
+                        DBKingdom nation = Trocutus.imp().getDB().getKingdom((int) nationId);
+                        byte[] data = rs.getBytes("meta");
+
+                        result.put(nation, data);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    public ByteBuffer getKingdomMeta(int nationId, KingdomMeta key) {
+        return getMeta((long) nationId, key);
+    }
+
+    public Map<Long, ByteBuffer> getAllMeta(KingdomMeta key) {
+        GuildDB delegate = getDelegateServer();
+        if (delegate != null) {
+            return delegate.getAllMeta(key);
+        }
+        Map<Long, ByteBuffer> results = new HashMap<>();
+        try (PreparedStatement stmt = prepareQuery("select * FROM NATION_META where AND key = ?")) {
+            stmt.setInt(1, key.ordinal());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    long id = rs.getLong("id");
+                    ByteBuffer buf = ByteBuffer.wrap(rs.getBytes("meta"));
+                    results.put(id, buf);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return results;
+    }
+
+    public ByteBuffer getMeta(long userId, KingdomMeta key) {
+        GuildDB delegate = getDelegateServer();
+        if (delegate != null) {
+            return delegate.getMeta(userId, key);
+        }
+        try (PreparedStatement stmt = prepareQuery("select * FROM NATION_META where id = ? AND key = ?")) {
+            stmt.setLong(1, userId);
+            stmt.setInt(2, key.ordinal());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    return ByteBuffer.wrap(rs.getBytes("meta"));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public void deleteMeta(long userId, KingdomMeta key) {
+        GuildDB delegate = getDelegateServer();
+        if (delegate != null) {
+            delegate.deleteMeta(userId, key);
+            return;
+        }
+        update("DELETE FROM NATION_META where id = ? AND key = ?", new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setLong(1, userId);
+                stmt.setInt(2, key.ordinal());
+            }
+        });
+    }
+
+    public Map<String, String> getCopyPastas(@Nullable Member memberOrNull) {
+        Map<String, String> options = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : getInfoMap().entrySet()) {
+            String key = entry.getKey();
+            if (!key.startsWith("copypasta.")) continue;
+            if (memberOrNull != null && !getMissingCopypastaPerms(key, memberOrNull).isEmpty()) continue;
+            options.put(key.substring("copypasta.".length()), entry.getValue());
+        }
+        return options;
+    }
+
+    /**
+     * Returns the missing copypasta permissions for the given member.
+     * @param key
+     * @param member
+     * @return
+     */
+    public Set<String> getMissingCopypastaPerms(String key, Member member) {
+        String[] split = key.split("\\.");
+        Set<String> noRoles = new HashSet<>();
+        if (split.length > 1) {
+            for (int i = 0; i < split.length - 1; i++) {
+                String roleName = split[i];
+                if (roleName.equalsIgnoreCase("copypasta")) continue;
+
+                Roles role = Roles.parse(roleName);
+                Role discRole = DiscordUtil.getRole(member.getGuild(), roleName);
+                if ((role != null && role.has(member)) || (discRole != null && member.getRoles().contains(discRole))) {
+                    return Collections.emptySet();
+                }
+                if (role != null) noRoles.add(role.toString());
+                if (discRole != null) noRoles.add(discRole.getName());
+            }
+        }
+        return noRoles;
+    }
+
+    public Map<Member, UnmaskedReason> getMaskedNonMembers() {
+        if (!hasAlliance()) return Collections.emptyMap();
+
+        List<Role> roles = new ArrayList<>();
+        roles.add(Roles.MEMBER.toRole(this));
+        roles.removeIf(Objects::isNull);
+
+        Map<Member, UnmaskedReason> result = new HashMap<>();
+
+        Set<Integer> allowedAAs = new HashSet<>(getAllianceIds());
+        for (Role role : roles) {
+            List<Member> members = guild.getMembersWithRoles(role);
+            for (Member member : members) {
+                Map<DBRealm, DBKingdom> kingdoms = DBKingdom.getFromUser(member.getUser());
+                if (kingdoms.isEmpty()) {
+                    result.put(member, UnmaskedReason.NOT_REGISTERED);
+                    continue;
+                }
+                Set<Integer> kingdomAAIds = kingdoms.values().stream().map(DBKingdom::getAlliance_id).collect(Collectors.toSet());
+                int minActive = Integer.MAX_VALUE;
+                Rank highestRank = Rank.NONE;
+                for (DBKingdom kingdom : kingdoms.values()) {
+                    if (allowedAAs.contains(kingdom.getAlliance_id())) {
+                        minActive = Math.min(minActive, kingdom.getActive_m());
+                        if (kingdom.getPosition().ordinal() > highestRank.ordinal()) {
+                            highestRank = kingdom.getPosition();
+                        }
+                    }
+                }
+                if (minActive == Integer.MAX_VALUE) result.put(member, UnmaskedReason.NOT_IN_ALLIANCE);
+                else if (highestRank.ordinal() <= 1) result.put(member, UnmaskedReason.APPLICANT);
+                else if (minActive > 20000) result.put(member, UnmaskedReason.INACTIVE);
+            }
+        }
+        return result;
     }
 }

@@ -1,5 +1,6 @@
 package link.locutus.core.db;
 
+import com.google.api.client.util.Base64;
 import com.ptsmods.mysqlw.query.QueryCondition;
 import com.ptsmods.mysqlw.query.builder.SelectBuilder;
 import com.ptsmods.mysqlw.table.ColumnType;
@@ -10,11 +11,17 @@ import link.locutus.Trocutus;
 import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.TrouncedApi;
+import link.locutus.core.api.alliance.AllianceMetric;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.TreatyType;
 import link.locutus.core.api.pojo.Api;
+import link.locutus.core.db.entities.alliance.AllianceChange;
+import link.locutus.core.db.entities.alliance.AllianceMeta;
 import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.kingdom.KingdomMeta;
+import link.locutus.core.db.entities.kingdom.KingdomOrAlliance;
 import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -36,16 +43,26 @@ import link.locutus.core.event.treaty.TreatyCancelEvent;
 import link.locutus.core.event.treaty.TreatyCreateEvent;
 import link.locutus.core.event.treaty.TreatyUpdateEvent;
 import link.locutus.core.settings.Settings;
+import link.locutus.util.EncryptionUtil;
+import link.locutus.util.MathMan;
+import link.locutus.util.StringMan;
 import link.locutus.util.scheduler.ThrowingBiConsumer;
 import link.locutus.util.scheduler.ThrowingConsumer;
+import net.dv8tion.jda.api.entities.User;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +70,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class TrouncedDB extends DBMain {
     private Map<Integer, Long> kingdomToUser = new ConcurrentHashMap<>();
@@ -67,6 +86,8 @@ public class TrouncedDB extends DBMain {
     private Map<Integer, DBSpy> allSpies = new Int2ObjectOpenHashMap<>();
 
     private Set<Integer> unknownInteractionIds = new IntArraySet();
+
+    private Map<Long, Auth> authCache = new ConcurrentHashMap<>();
 
     public TrouncedDB() throws SQLException {
         super("trounced");
@@ -100,7 +121,17 @@ public class TrouncedDB extends DBMain {
         if (userId == Settings.INSTANCE.ADMIN_USER_ID) {
             return Trocutus.imp().rootAuth();
         }
-        return null;
+        Auth existing = authCache.get(userId);
+        if (existing != null) return existing;
+        synchronized (this) {
+            existing = authCache.get(userId);
+            if (existing == null) {
+                Map.Entry<String, String> userPass = getUserPass(userId);
+                existing = new Auth(userId, userPass.getKey(), userPass.getValue());
+                authCache.put(userId, existing);
+            }
+            return existing;
+        }
     }
 
     public String getApiKeyFromKingdom(int id) {
@@ -436,6 +467,97 @@ public class TrouncedDB extends DBMain {
                 .putColumn("kingdom_id", ColumnType.BIGINT.struct().setNullAllowed(false).setPrimary(true).configure(f -> f.apply(null)))
                 .putColumn("id", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .create(getDb());
+
+
+        // ------------------------------------------
+
+        executeStmt("CREATE TABLE IF NOT EXISTS `CREDENTIALS2` (`discordid` BIGINT NOT NULL PRIMARY KEY, `user` VARCHAR NOT NULL, `password` VARCHAR NOT NULL, `salt` VARCHAR NOT NULL)");
+
+
+        executeStmt("CREATE TABLE IF NOT EXISTS `NATION_META` (`id` BIGINT NOT NULL, `key` BIGINT NOT NULL, `meta` BLOB NOT NULL, PRIMARY KEY(id, key))");
+
+        // ------------------------------------
+
+        executeStmt("CREATE TABLE IF NOT EXISTS ALLIANCE_METRICS (alliance_id INT NOT NULL, metric INT NOT NULL, turn BIGINT NOT NULL, value DOUBLE NOT NULL, PRIMARY KEY(alliance_id, metric, turn))");
+
+        // ------------------------------------
+
+        String kicks = "CREATE TABLE IF NOT EXISTS `KICKS` (`nation` INT NOT NULL, `alliance` INT NOT NULL, `date` BIGINT NOT NULL, `type` INT NOT NULL)";
+        try (Statement stmt = getConnection().createStatement()) {
+            stmt.addBatch(kicks);
+            stmt.executeBatch();
+            stmt.clearBatch();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        executeStmt("CREATE INDEX IF NOT EXISTS index_kicks_alliance ON KICKS (alliance);");
+        executeStmt("CREATE INDEX IF NOT EXISTS index_kicks_alliance_date ON KICKS (alliance,date);");
+
+        // ---------------------------
+    }
+
+    public void logout(long userId) {
+        Auth existing = authCache.remove(userId);
+        update("DELETE FROM `CREDENTIALS2` where `discordid` = ?", (ThrowingConsumer<PreparedStatement>) stmt -> {
+            stmt.setLong(1, userId);
+        });
+    }
+
+    public Map.Entry<String, String> getUserPass(long userId) {
+        return getUserPass(userId, "credentials2", EncryptionUtil.Algorithm.DEFAULT);
+    }
+
+    public Map.Entry<String, String> getUserPass(long userId, String table, EncryptionUtil.Algorithm algorithm) {
+        if ((userId == Settings.INSTANCE.ADMIN_USER_ID) && !Settings.INSTANCE.USERNAME.isEmpty() && !Settings.INSTANCE.PASSWORD.isEmpty()) {
+            return Map.entry(Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
+        }
+        try (PreparedStatement stmt = prepareQuery("select * FROM " + table + " WHERE `discordid` = ?")) {
+            stmt.setLong(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String secretStr = Settings.INSTANCE.CLIENT_SECRET;
+                    if (secretStr == null || secretStr.isEmpty()) secretStr = Settings.INSTANCE.BOT_TOKEN;
+                    byte[] secret = secretStr.getBytes(StandardCharsets.ISO_8859_1);
+                    byte[] salt = Base64.decodeBase64(rs.getString("salt"));
+                    byte[] userEnc = Base64.decodeBase64(rs.getString("user"));
+                    byte[] passEnc = Base64.decodeBase64(rs.getString("password"));
+
+                    byte[] userBytes = EncryptionUtil.decrypt2(EncryptionUtil.decrypt2(userEnc, salt, algorithm), secret, algorithm);
+                    byte[] passBytes = EncryptionUtil.decrypt2(EncryptionUtil.decrypt2(passEnc, salt, algorithm), secret, algorithm);
+                    String user = new String(userBytes, StandardCharsets.ISO_8859_1);
+                    String pass = new String(passBytes, StandardCharsets.ISO_8859_1);
+
+                    return new AbstractMap.SimpleEntry<>(user, pass);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public void addUserPass(long userId, String user, String password) {
+        try {
+            String secretStr = Settings.INSTANCE.CLIENT_SECRET;
+            if (secretStr == null || secretStr.isEmpty()) secretStr = Settings.INSTANCE.BOT_TOKEN;
+            byte[] secret = secretStr.getBytes(StandardCharsets.ISO_8859_1);
+            byte[] salt = EncryptionUtil.generateKey();
+
+            byte[] userEnc = EncryptionUtil.encrypt2(EncryptionUtil.encrypt2(user.getBytes(StandardCharsets.ISO_8859_1), secret), salt);
+            byte[] passEnc = EncryptionUtil.encrypt2(EncryptionUtil.encrypt2(password.getBytes(StandardCharsets.ISO_8859_1), secret), salt);
+
+            update("INSERT OR REPLACE INTO `CREDENTIALS2` (`discordid`, `user`, `password`, `salt`) VALUES(?, ?, ?, ?)", (ThrowingConsumer<PreparedStatement>) stmt -> {
+                stmt.setLong(1, userId);
+                stmt.setString(2, Base64.encodeBase64String(userEnc));
+                stmt.setString(3, Base64.encodeBase64String(passEnc));
+                stmt.setString(4, Base64.encodeBase64String(salt));
+            });
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void setLatestInteractionAlliance(int alliance, int id) {
@@ -1022,6 +1144,14 @@ public class TrouncedDB extends DBMain {
         });
     }
 
+    public void unregister(long userId, DBKingdom kingdom) {
+        kingdomToUser.remove(kingdom.getId());
+        String query = "DELETE FROM USERS WHERE discord_id = ? AND kingdom_id = ?";
+        update(query, (ThrowingConsumer<PreparedStatement>) (stmt) -> {
+            stmt.setLong(1, userId);
+            stmt.setInt(2, kingdom.getId());
+        }); }
+
     public Set<DBRealm> getRealmMatching(Predicate<DBRealm> realmPredicate) {
         return realms.values().stream().filter(realmPredicate).collect(Collectors.toSet());
     }
@@ -1064,5 +1194,431 @@ public class TrouncedDB extends DBMain {
 
     public Map<Integer, DBTreaty> getTreaties(int realm, int allianceId) {
         return treatiesByAlliance.getOrDefault(realm, Collections.emptyMap()).getOrDefault(allianceId, Collections.emptyMap());
+    }
+
+    public List<DBSpy> getDefensiveSpies(int id) {
+        List<DBSpy> result = allSpies.values().stream().filter(spy -> spy.defender_id == id).collect(Collectors.toList());
+        result.sort(Comparator.comparingInt(spy -> spy.id));
+        return result;
+    }
+
+    public List<DBSpy> getOffensiveSpies(int id) {
+        List<DBSpy> result = allSpies.values().stream().filter(spy -> spy.attacker_id == id).collect(Collectors.toList());
+        result.sort(Comparator.comparingInt(spy -> spy.id));
+        return result;
+    }
+
+    public List<DBAttack> getAttacks(Predicate<DBAttack> filter) {
+        return allAttacks.values().stream().filter(filter).collect(Collectors.toList());
+    }
+
+    public void addMetric(DBAlliance alliance, AllianceMetric metric, long turn, double value) {
+        addMetric(alliance, metric, turn, value, false);
+    }
+
+    public void addMetric(DBAlliance alliance, AllianceMetric metric, long turn, double value, boolean ignore) {
+        checkNotNull(metric);
+        String query = "INSERT OR " + (ignore ? "IGNORE" : "REPLACE") + " INTO `ALLIANCE_METRICS`(`alliance_id`, `metric`, `turn`, `value`) VALUES(?, ?, ?, ?)";
+
+        if (!Double.isFinite(value)) {
+            return;
+        }
+        update(query, new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws SQLException {
+                stmt.setInt(1, alliance.getId());
+                stmt.setInt(2, metric.ordinal());
+                stmt.setLong(3, turn);
+                stmt.setDouble(4, value);
+            }
+        });
+    }
+
+    public Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> getMetrics(Set<Integer> allianceIds, AllianceMetric metric, long turn) {
+        if (allianceIds.isEmpty()) throw new IllegalArgumentException("No metrics provided");
+        String allianceQueryStr = StringMan.getString(allianceIds);
+
+        Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> result = new HashMap<>();
+
+        String query = "SELECT * FROM ALLIANCE_METRICS WHERE alliance_id in " + allianceQueryStr + " AND metric = ? and turn <= ? GROUP BY alliance_id ORDER BY turn DESC LIMIT " + allianceIds.size();
+        query(query, new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setInt(1, metric.ordinal());
+                stmt.setLong(2, turn);
+            }
+        }, new ThrowingConsumer<ResultSet>() {
+            @Override
+            public void acceptThrows(ResultSet rs) throws Exception {
+                while (rs.next()) {
+                    int allianceId = rs.getInt("alliance_id");
+                    AllianceMetric metric = AllianceMetric.values[rs.getInt("metric")];
+                    long turn = rs.getLong("turn");
+                    double value = rs.getDouble("value");
+
+                    DBAlliance alliance = DBAlliance.getOrCreate(allianceId, 0);
+                    if (!result.containsKey(alliance)) {
+                        result.computeIfAbsent(alliance, f -> new HashMap<>()).computeIfAbsent(metric, f -> new HashMap<>()).put(turn, value);
+                    }
+                }
+            }
+        });
+        return result;
+    }
+    public Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> getMetrics(Set<Integer> allianceIds, AllianceMetric metric, long turnStart, long turnEnd) {
+        if (allianceIds.isEmpty()) throw new IllegalArgumentException("No metrics provided");
+        String allianceQueryStr = StringMan.getString(allianceIds);
+        boolean hasTurnEnd = turnEnd > 0 && turnEnd < Long.MAX_VALUE;
+
+        Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> result = new HashMap<>();
+
+        String query = "SELECT * FROM ALLIANCE_METRICS WHERE alliance_id in " + allianceQueryStr + " AND metric = ? and turn >= ?" + (hasTurnEnd ? " and turn <= ?" : "");
+        query(query, new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setInt(1, metric.ordinal());
+                stmt.setLong(2, turnStart);
+                if (hasTurnEnd) stmt.setLong(3, turnEnd);
+            }
+        }, new ThrowingConsumer<ResultSet>() {
+            @Override
+            public void acceptThrows(ResultSet rs) throws Exception {
+                while (rs.next()) {
+                    int allianceId = rs.getInt("alliance_id");
+                    AllianceMetric metric = AllianceMetric.values[rs.getInt("metric")];
+                    long turn = rs.getLong("turn");
+                    double value = rs.getDouble("value");
+
+                    DBAlliance alliance = DBAlliance.getOrCreate(allianceId, 0);
+                    result.computeIfAbsent(alliance, f -> new HashMap<>()).computeIfAbsent(metric, f -> new HashMap<>()).put(turn, value);
+                }
+            }
+        });
+        return result;
+    }
+
+    public Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> getMetrics(Set<Integer> allianceIds, Collection<AllianceMetric> metrics, long turnStart, long turnEnd) {
+        if (metrics.isEmpty()) throw new IllegalArgumentException("No metrics provided");
+        if (allianceIds.isEmpty()) throw new IllegalArgumentException("No metrics provided");
+        String allianceQueryStr = StringMan.getString(allianceIds);
+        String metricQueryStr = StringMan.getString(metrics.stream().map(Enum::ordinal).collect(Collectors.toList()));
+        boolean hasTurnEnd = turnEnd > 0 && turnEnd < Long.MAX_VALUE;
+
+        Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> result = new HashMap<>();
+
+        String query = "SELECT * FROM ALLIANCE_METRICS WHERE alliance_id in " + allianceQueryStr + " AND metric in " + metricQueryStr + " and turn >= ?" + (hasTurnEnd ? " and turn <= ?" : "");
+        query(query, new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setLong(1, turnStart);
+                if (hasTurnEnd) stmt.setLong(2, turnEnd);
+            }
+        }, new ThrowingConsumer<ResultSet>() {
+            @Override
+            public void acceptThrows(ResultSet rs) throws Exception {
+                while (rs.next()) {
+                    int allianceId = rs.getInt("alliance_id");
+                    AllianceMetric metric = AllianceMetric.values[rs.getInt("metric")];
+                    long turn = rs.getLong("turn");
+                    double value = rs.getDouble("value");
+
+                    DBAlliance alliance = DBAlliance.getOrCreate(allianceId, 0);
+                    result.computeIfAbsent(alliance, f -> new HashMap<>()).computeIfAbsent(metric, f -> new HashMap<>()).put(turn, value);
+                }
+            }
+        });
+        return result;
+    }
+
+    public void addRemove(int nationId, int allianceId, long time, Rank rank) {
+        update("INSERT INTO `KICKS`(`nation`, `alliance`, `date`, `type`) VALUES(?, ?, ?, ?)", (ThrowingConsumer<PreparedStatement>) stmt -> {
+            stmt.setInt(1, nationId);
+            stmt.setInt(2, allianceId);
+            stmt.setLong(3, time);
+            stmt.setInt(4, rank.ordinal());
+        });
+    }
+
+    public List<AllianceChange> getKingdomAllianceHistory(int nationId) {
+        try (PreparedStatement stmt = prepareQuery("select * FROM KICKS WHERE nation = ? ORDER BY date ASC")) {
+            stmt.setInt(1, nationId);
+            List<AllianceChange> list = new ArrayList<>();
+            try (ResultSet rs = stmt.executeQuery()) {
+                int latestAA = 0;
+                Rank latestRank = null;
+                long latestDate = 0;
+                while (rs.next()) {
+                    int alliance = rs.getInt("alliance");
+                    long date = rs.getLong("date");
+                    int type = rs.getInt("type");
+                    Rank rank = Rank.values[type];
+
+                    if (latestRank != null) {
+                        list.add(new AllianceChange(latestAA, alliance, latestRank, rank, latestDate));
+                    }
+                    latestRank = rank;
+                    latestAA = alliance;
+                    latestDate = date;
+                }
+                DBKingdom nation = DBKingdom.get(nationId);
+                if (latestRank != null && nation != null) {
+                    int newAA = nation.getAlliance_id();
+                    Rank newRank = nation.getPosition();
+                    if (newAA != latestAA || latestRank != newRank) {
+                        list.add(new AllianceChange(latestAA, newAA, latestRank, newRank, latestDate));
+                    }
+                }
+            }
+
+            return list;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public long getAllianceMemberSeniorityTimestamp(DBKingdom nation, Long snapshotDate) {
+        long now = System.currentTimeMillis();
+        if (nation.getPosition().ordinal() < Rank.MEMBER.ordinal()) return Long.MAX_VALUE;
+        try (PreparedStatement stmt = prepareQuery("select * FROM KICKS WHERE nation = ? " + (snapshotDate != null ? "AND DATE < " + snapshotDate : "") + " ORDER BY date DESC LIMIT 1")) {
+            stmt.setInt(1, nation.getId());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    return rs.getLong("date");
+                }
+            }
+            return Long.MAX_VALUE;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Map<Integer, Map.Entry<Long, Rank>> getRemovesByKingdom(int nationId) {
+        try (PreparedStatement stmt = prepareQuery("select * FROM KICKS WHERE nation = ? ORDER BY date DESC")) {
+            stmt.setInt(1, nationId);
+
+            Map<Integer, Map.Entry<Long, Rank>> kickDates = new LinkedHashMap<>();
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int alliance = rs.getInt("alliance");
+                    long date = rs.getLong("date");
+                    int type = rs.getInt("type");
+                    Rank rank = Rank.values[type];
+
+                    AbstractMap.SimpleEntry<Long, Rank> dateRank = new AbstractMap.SimpleEntry<>(date, rank);
+
+                    kickDates.putIfAbsent(alliance, dateRank);
+                }
+            }
+            return kickDates;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public List<Map.Entry<Long, Map.Entry<Integer, Rank>>> getRankChanges(int allianceId) {
+        try (PreparedStatement stmt = prepareQuery("select * FROM KICKS WHERE alliance = ? ORDER BY date ASC")) {
+            stmt.setInt(1, allianceId);
+
+            List<Map.Entry<Long, Map.Entry<Integer, Rank>>> kickDates = new ArrayList<>();
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int nationId = rs.getInt("nation");
+                    long date = rs.getLong("date");
+                    int type = rs.getInt("type");
+                    Rank rank = Rank.values[type];
+
+                    AbstractMap.SimpleEntry<Integer, Rank> natRank = new AbstractMap.SimpleEntry<>(nationId, rank);
+                    AbstractMap.SimpleEntry<Long, Map.Entry<Integer, Rank>> dateRank = new AbstractMap.SimpleEntry<>(date, natRank);
+
+                    kickDates.add(dateRank);
+                }
+            }
+            return kickDates;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Map<Integer, List<Map.Entry<Long, Map.Entry<Integer, Rank>>>> getRemovesByAlliance(Set<Integer> alliances, long cutoff) {
+        return getRemovesByAlliance(getRemovesByKingdomAlliance(alliances, cutoff));
+    }
+    public Map<Integer, List<Map.Entry<Long, Map.Entry<Integer, Rank>>>> getRemovesByAlliance(Map<Integer, Map<Integer, Map.Entry<Long, Rank>>> removes) {
+        Map<Integer, List<Map.Entry<Long, Map.Entry<Integer, Rank>>>> removesByAlliance = new HashMap<>();
+        for (Map.Entry<Integer, Map<Integer, Map.Entry<Long, Rank>>> entry : removes.entrySet()) {
+            int nationId = entry.getKey();
+            Map<Integer, Map.Entry<Long, Rank>> allianceRanks = entry.getValue();
+
+            for (Map.Entry<Integer, Map.Entry<Long, Rank>> allianceRank : allianceRanks.entrySet()) {
+                int allianceId = allianceRank.getKey();
+                Map.Entry<Long, Rank> dateRank = allianceRank.getValue();
+                long date = dateRank.getKey();
+                Rank rank = dateRank.getValue();
+
+                AbstractMap.SimpleEntry<Integer, Rank> natRank = new AbstractMap.SimpleEntry<>(nationId, rank);
+                AbstractMap.SimpleEntry<Long, Map.Entry<Integer, Rank>> dateKingdomRank = new AbstractMap.SimpleEntry<>(date, natRank);
+
+                List<Map.Entry<Long, Map.Entry<Integer, Rank>>> kickDates = removesByAlliance.computeIfAbsent(allianceId, k -> new ArrayList<>());
+                kickDates.add(dateKingdomRank);
+            }
+        }
+        return removesByAlliance;
+    }
+
+    public Map<Integer, Map<Integer, Map.Entry<Long, Rank>>> getRemovesByKingdomAlliance(Set<Integer> alliances, long cutoff) {
+        if (alliances.isEmpty()) return Collections.emptyMap();
+        Map<Integer, Map<Integer, Map.Entry<Long, Rank>>> kickDates = new LinkedHashMap<>();
+
+        if (alliances.size() == 1) {
+            int alliance = alliances.iterator().next();
+            Map<Integer, Map.Entry<Long, Rank>> result = getRemovesByAlliance(alliance, cutoff);
+            // map to: nation -> alliance - > Long, Rank
+            for (Map.Entry<Integer, Map.Entry<Long, Rank>> entry : result.entrySet()) {
+                kickDates.computeIfAbsent(entry.getKey(), k -> new LinkedHashMap<>()).put(alliance, entry.getValue());
+            }
+        } else {
+            try (PreparedStatement stmt = prepareQuery("select * FROM KICKS WHERE alliance in " + StringMan.getString(alliances) + " " + (cutoff > 0 ? " AND date > ? " : "") + "ORDER BY date DESC")) {
+                if (cutoff > 0) {
+                    stmt.setLong(1, cutoff);
+                }
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        int nationId = rs.getInt("nation");
+                        int alliance = rs.getInt("alliance");
+                        long date = rs.getLong("date");
+                        int type = rs.getInt("type");
+                        Rank rank = Rank.values[type];
+                        kickDates.computeIfAbsent(nationId, k -> new LinkedHashMap<>()).put(alliance, new AbstractMap.SimpleEntry<>(date, rank));
+                    }
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+        return kickDates;
+    }
+
+    public Map<Integer, Map.Entry<Long, Rank>> getRemovesByAlliance(int allianceId) {
+        return getRemovesByAlliance(allianceId, 0L);
+    }
+    public Map<Integer, Map.Entry<Long, Rank>> getRemovesByAlliance(int allianceId, long cutoff) {
+        try (PreparedStatement stmt = prepareQuery("select * FROM KICKS WHERE alliance = ? " + (cutoff > 0 ? " AND date > ? " : "") + "ORDER BY date DESC")) {
+            stmt.setInt(1, allianceId);
+            if (cutoff > 0) {
+                stmt.setLong(2, cutoff);
+            }
+
+            Map<Integer, Map.Entry<Long, Rank>> kickDates = new LinkedHashMap<>();
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int nationId = rs.getInt("nation");
+                    long date = rs.getLong("date");
+                    int type = rs.getInt("type");
+                    Rank rank = Rank.values[type];
+
+                    AbstractMap.SimpleEntry<Long, Rank> dateRank = new AbstractMap.SimpleEntry<>(date, rank);
+
+                    kickDates.putIfAbsent(nationId, dateRank);
+                }
+            }
+            return kickDates;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public List<AttackOrSpell> getAttackOrSpells(Collection<KingdomOrAlliance> attackers, Collection<KingdomOrAlliance> defenders, long start, long end) {
+
+    }
+
+    public void loadAndPurgeMeta() {
+        List<Integer> toDelete = new ArrayList<>();
+
+        try (PreparedStatement stmt = prepareQuery("select * FROM NATION_META")) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int id = rs.getInt("id");
+                    int key = rs.getInt("key");
+                    byte[] data = rs.getBytes("meta");
+
+                    if (id > 0) {
+                        DBKingdom nation = DBKingdom.get(id);
+                        if (nation != null) {
+                            nation.setMetaRaw(key, data);
+                        } else {
+                            toDelete.add(id);
+                        }
+                    } else {
+                        int idAbs = Math.abs(id);
+                        DBAlliance alliance = DBAlliance.get(idAbs);
+                        if (alliance != null) {
+                            alliance.setMetaRaw(key, data);
+                        } else {
+                            toDelete.add(id);
+                        }
+                    }
+
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        update("DELETE FROM NATION_META where id in " + StringMan.getString(toDelete));
+    }
+
+    public void setMeta(int nationId, KingdomMeta key, byte[] value) {
+        checkNotNull(key);
+        setMeta(nationId, key.ordinal(), value);
+    }
+
+    public void setMeta(int nationId, int ordinal, byte[] value) {
+        checkNotNull(value);
+        long pair = MathMan.pairInt(nationId, ordinal);
+        update("INSERT OR REPLACE INTO `NATION_META`(`id`, `key`, `meta`) VALUES(?, ?, ?)", (ThrowingConsumer<PreparedStatement>) stmt -> {
+            stmt.setInt(1, nationId);
+            stmt.setInt(2, ordinal);
+            stmt.setBytes(3, value);
+        });
+    }
+
+    public void deleteMeta(int nationId, KingdomMeta key) {
+        deleteMeta(nationId, key.ordinal());
+    }
+
+    public void deleteMeta(int nationId, int keyId) {
+        update("DELETE FROM NATION_META where id = ? AND key = ?", new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setInt(1, nationId);
+                stmt.setInt(2, keyId);
+            }
+        });
+    }
+
+
+    public void deleteMeta(AllianceMeta key) {
+        update("DELETE FROM NATION_META where key = ? AND id < 0", new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setInt(1, key.ordinal());
+            }
+        });
+    }
+
+    public void deleteMeta(KingdomMeta key) {
+        update("DELETE FROM NATION_META where key = ? AND id > 0", new ThrowingConsumer<PreparedStatement>() {
+            @Override
+            public void acceptThrows(PreparedStatement stmt) throws Exception {
+                stmt.setInt(1, key.ordinal());
+            }
+        });
     }
 }

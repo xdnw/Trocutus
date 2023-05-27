@@ -1,10 +1,16 @@
 package link.locutus.core.db.entities.war;
 
+import link.locutus.core.api.game.AttackOrSpell;
+import link.locutus.core.api.game.AttackOrSpellType;
+import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.pojo.pages.AttackInteraction;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 
-public final class DBAttack {
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public final class DBAttack implements AttackOrSpell {
     public final int id;
     public final int attacker_aa;
     public final int attacker_id;
@@ -90,5 +96,60 @@ public final class DBAttack {
     public String getDefenderKingdomName() {
         DBKingdom alliance = DBKingdom.get(defender_id);
         return alliance == null ? "kingdom:" + defender_id : alliance.getName();
+    }
+
+
+    @Override
+    public int getId() {
+        return id;
+    }
+
+    @Override
+    public int getAttacker_id() {
+        return attacker_id;
+    }
+
+    @Override
+    public int getDefender_id() {
+        return defender_id;
+    }
+
+    @Override
+    public int getAttacker_aa() {
+        return attacker_aa;
+    }
+
+    @Override
+    public int getDefender_aa() {
+        return defender_aa;
+    }
+
+    @Override
+    public Map<MilitaryUnit, Long> getCost(boolean isAttacker) {
+        Map<MilitaryUnit, Long> result = new LinkedHashMap<>();
+        if (isAttacker) {
+            if (attacker_soldiers != 0) result.put(MilitaryUnit.SOLDIER, (long) attacker_soldiers);
+            if (attacker_cavalry != 0) result.put(MilitaryUnit.CAVALRY, (long) attacker_cavalry);
+            if (attacker_archers != 0) result.put(MilitaryUnit.ARCHER, (long) attacker_archers);
+            if (attacker_elites != 0) result.put(MilitaryUnit.ELITE, (long) attacker_elites);
+            if (goldLoot != 0) result.put(MilitaryUnit.GOLD, (long) -goldLoot);
+            if (acreLoot != 0) result.put(MilitaryUnit.LAND, (long) -acreLoot);
+            if (atkHeroExp != 0) result.put(MilitaryUnit.EXP, (long) -atkHeroExp);
+            result.put(MilitaryUnit.BATTLE_POINTS, 200L);
+        } else {
+            if (defender_soldiers != 0) result.put(MilitaryUnit.SOLDIER, (long) defender_soldiers);
+            if (defender_cavalry != 0) result.put(MilitaryUnit.CAVALRY, (long) defender_cavalry);
+            if (defender_archers != 0) result.put(MilitaryUnit.ARCHER, (long) defender_archers);
+            if (defender_elites != 0) result.put(MilitaryUnit.ELITE, (long) defender_elites);
+            if (goldLoot != 0) result.put(MilitaryUnit.GOLD, (long) goldLoot);
+            if (defenderAcreLoss != 0) result.put(MilitaryUnit.LAND, (long) -defenderAcreLoss);
+            if (defHeroExp != 0) result.put(MilitaryUnit.EXP, (long) -defHeroExp);
+        }
+        return result;
+    }
+
+    @Override
+    public AttackOrSpellType getType() {
+        return AttackOrSpellType.ATTACK;
     }
 }

@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 public class KingdomFilterString implements KingdomFilter {
     private final String filter;
     private final Guild guild;
-    private Set<Integer> cachedNations;
+    private Set<Integer> cachedKingdoms;
     private long dateCached;
 
     public KingdomFilterString(String filter, Guild guild) {
@@ -32,12 +32,12 @@ public class KingdomFilterString implements KingdomFilter {
     @Override
     public Predicate<DBKingdom> toCached(long expireAfter) {
         return nation -> {
-            if (cachedNations == null || System.currentTimeMillis() - dateCached > expireAfter) {
+            if (cachedKingdoms == null || System.currentTimeMillis() - dateCached > expireAfter) {
                 Set<DBKingdom> nations = DBKingdom.parseList(guild, filter, false);
-                cachedNations = nations.stream().map(DBKingdom::getId).collect(Collectors.toSet());
+                cachedKingdoms = nations.stream().map(DBKingdom::getId).collect(Collectors.toSet());
                 dateCached = System.currentTimeMillis();
             }
-            return cachedNations.contains(nation.getId());
+            return cachedKingdoms.contains(nation.getId());
         };
     }
 }

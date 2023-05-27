@@ -68,7 +68,7 @@ public interface KingdomList extends KingdomFilter {
 
     default double getScore() {
         Collection<DBKingdom> nations = new ArrayList<>(getKingdoms());
-        nations.removeIf(f -> f.getPosition().ordinal() <= 0 || f.isVacataion());
+        nations.removeIf(f -> f.getPosition().ordinal() <= 0 || f.isVacation());
         double total = 0;
         for (DBKingdom nation : nations) {
             total += nation.getScore();

@@ -1,12 +1,20 @@
 package link.locutus.core.db.entities.alliance;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import link.locutus.Trocutus;
+import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.kingdom.KingdomOrAlliance;
+import link.locutus.core.db.entities.kingdom.KingdomOrAllianceOrGuild;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -14,7 +22,7 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class DBAlliance {
+public class DBAlliance implements KingdomOrAlliance {
     public static DBAlliance getOrCreate(int aaId, int realm_id) {
         DBAlliance alliance = Trocutus.imp().getDB().getAlliance(aaId);
         if (alliance == null) {
@@ -36,6 +44,8 @@ public class DBAlliance {
     private int level;
     private int experience;
     private int level_total;
+
+    private Int2ObjectOpenHashMap<byte[]> metaCache = null;
 
     public DBAlliance(int alliance_id, int realm_id, String name, String tag, String description, int level, int experience, int level_total, long last_fetched) {
         this.alliance_id = alliance_id;
@@ -127,6 +137,12 @@ public class DBAlliance {
     public String getQualifiedName() {
         return "aa:" + getRealm().getName() + "/" + getName();
     }
+
+    @Override
+    public int getAlliance_id() {
+        return alliance_id;
+    }
+
     public Set<DBKingdom> getKingdoms() {
         return Trocutus.imp().getDB().getKingdomsByAlliance(alliance_id);
     }
@@ -241,5 +257,69 @@ public class DBAlliance {
     @Override
     public int hashCode() {
         return alliance_id;
+    }
+
+    public Set<DBKingdom> getKingdoms(boolean removeVM, int removeInactiveM, boolean removeApps) {
+        return getKingdoms(f -> (!f.isVacation() || !removeVM) && (removeInactiveM <= 0 || f.getActive_m() < removeInactiveM) && (!removeApps || f.getPosition().ordinal() > Rank.APPLICANT.ordinal()));
+    }
+
+    public Map<Integer, Map.Entry<Long, Rank>> getRemoves() {
+        return Trocutus.imp().getDB().getRemovesByAlliance(alliance_id);
+    }
+
+    public void deleteMeta(AllianceMeta key) {
+        if (metaCache != null && metaCache.remove(key.ordinal()) != null) {
+            Trocutus.imp().getDB().deleteMeta(-alliance_id, key.ordinal());
+        }
+    }
+
+    public boolean setMetaRaw(int id, byte[] value) {
+        if (metaCache == null) {
+            synchronized (this) {
+                if (metaCache == null) {
+                    metaCache = new Int2ObjectOpenHashMap<>();
+                }
+            }
+        }
+        byte[] existing = metaCache.isEmpty() ? null : metaCache.get(id);
+        if (existing == null || !Arrays.equals(existing, value)) {
+            metaCache.put(id, value);
+            return true;
+        }
+        return false;
+    }
+
+    public void setMeta(AllianceMeta key, byte... value) {
+        if (setMetaRaw(key.ordinal(), value)) {
+            Trocutus.imp().getDB().setMeta(-alliance_id, key.ordinal(), value);
+        }
+    }
+
+    public ByteBuffer getMeta(AllianceMeta key) {
+        if (metaCache == null) {
+            return null;
+        }
+        byte[] result = metaCache.get(key.ordinal());
+        return result == null ? null : ByteBuffer.wrap(result);
+    }
+
+    public void setMeta(AllianceMeta key, byte value) {
+        setMeta(key, new byte[] {value});
+    }
+
+    public void setMeta(AllianceMeta key, int value) {
+        setMeta(key, ByteBuffer.allocate(4).putInt(value).array());
+    }
+
+    public void setMeta(AllianceMeta key, long value) {
+        setMeta(key, ByteBuffer.allocate(8).putLong(value).array());
+    }
+
+    public void setMeta(AllianceMeta key, double value) {
+        setMeta(key, ByteBuffer.allocate(8).putDouble(value).array());
+    }
+
+    public void setMeta(AllianceMeta key, String value) {
+        setMeta(key, value.getBytes(StandardCharsets.ISO_8859_1));
     }
 }

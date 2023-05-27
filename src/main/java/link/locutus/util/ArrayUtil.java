@@ -25,4 +25,15 @@ public class ArrayUtil {
         }
         return copy;
     }
+
+    public static double[] multiply(double[] unitUpkeep, Long amt) {
+        return new double[0];
+    }
+
+    public static double[] multiply(double[] a, double factor) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] *= factor;
+        }
+        return a;
+    }
 }

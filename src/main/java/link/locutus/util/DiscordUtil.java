@@ -326,16 +326,20 @@ public class DiscordUtil {
         return map;
     }
 
-    public static Map<String, Role> getAARoles(Collection<Role> roles) {
-        Map<String, Role> allianceRoles = null;
+    public static Map<Integer, Role> getAARoles(Collection<Role> roles) {
+        Map<Integer, Role> allianceRoles = null;
         for (Role role : roles) {
             if (role.getName().startsWith("AA ")) {
                 String[] split = role.getName().split(" ");
                 String idStr = split[1];
+                if (!MathMan.isInteger(idStr)) continue;
+                int id = Integer.parseInt(idStr);
                 if (allianceRoles == null) {
                     allianceRoles = new HashMap<>();
                 }
-                allianceRoles.put(idStr, role);
+                allianceRoles.put(id, role);
+            } else {
+
             }
         }
         return allianceRoles == null ? Collections.emptyMap() : allianceRoles;

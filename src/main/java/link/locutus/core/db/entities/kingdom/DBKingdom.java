@@ -1,9 +1,12 @@
 package link.locutus.core.db.entities.kingdom;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
 import link.locutus.Trocutus;
 import link.locutus.command.binding.LocalValueStore;
 import link.locutus.command.binding.ValueStore;
 import link.locutus.command.binding.annotation.Command;
+import link.locutus.command.command.CommandResult;
+import link.locutus.command.command.StringMessageIO;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.ResourceLevel;
@@ -13,7 +16,10 @@ import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.util.DiscordUtil;
+import link.locutus.util.MarkupUtil;
 import link.locutus.util.MathMan;
+import link.locutus.util.RateLimitUtil;
+import link.locutus.util.TrounceUtil;
 import link.locutus.util.spreadsheet.SpreadSheet;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
@@ -21,8 +27,12 @@ import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -32,7 +42,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
-public class DBKingdom {
+public class DBKingdom implements KingdomOrAlliance {
     @Deprecated
     public DBKingdom() {
         id = 0;
@@ -57,6 +67,10 @@ public class DBKingdom {
 
     public static DBKingdom parse(String input) {
         if (MathMan.isInteger(input)) {
+            long value = Long.parseLong(input);
+            if (value > Integer.MAX_VALUE) {
+
+            }
             DBKingdom aa = Trocutus.imp().getDB().getKingdom(Integer.parseInt(input));
             if (aa != null) return aa;
         }
@@ -142,6 +156,14 @@ public class DBKingdom {
                     Set<DBKingdom> allianceMembers = alliance.getKingdoms();
                     nations.addAll(allianceMembers);
                     continue;
+                } else if (name.startsWith("<@") || name.startsWith("<!@")) {
+                    User user = DiscordUtil.getUser(name);
+                    if (user != null) {
+                        Set<DBKingdom> userKingdoms = Trocutus.imp().getDB().getKingdomFromUser(user.getIdLong());
+                        if (userKingdoms != null) nations.addAll(userKingdoms);
+                        continue;
+                    }
+                    throw new IllegalArgumentException("Unknown user: `" + name + "`");
                 }
                 if (name.length() == 0) continue;
                 if (name.charAt(0) == '#') {
@@ -208,7 +230,7 @@ public class DBKingdom {
         return result;
     }
 
-    private final int id;
+    private int id;
     private int realm_id;
     private int alliance_id;
     private Rank position;
@@ -364,12 +386,33 @@ public class DBKingdom {
         return "kingdom:" + getRealm().getName() + "/" + getName();
     }
     @Command
-    public long getActive_m() {
-        return TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - getLast_active());
+    public int getActive_m() {
+        return (int) TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - getLast_active());
     }
 
     public DBKingdom copy() {
         return new DBKingdom(id, realm_id, alliance_id, position, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched);
+    }
+
+    public Map.Entry<CommandResult, String> runCommandInternally(Guild guild, User user, String command) {
+        if (user == null) return new AbstractMap.SimpleEntry<>(CommandResult.ERROR, "No user for: " + getName());
+
+        CommandResult type;
+        String result;
+        try {
+            StringMessageIO io = new StringMessageIO(user);
+
+            LocalValueStore<Object> store = new LocalValueStore(Trocutus.imp().getCommandManager().getStore());
+            store = Trocutus.imp().getCommandManager().createLocals(null, guild, null, user, null, io, null);
+
+            Trocutus.imp().getCommandManager().run(store, io, command, false);
+            type = CommandResult.SUCCESS;
+            result = io.getOutput();
+        } catch (Throwable e) {
+            result = e.getMessage();
+            type = CommandResult.ERROR;
+        }
+        return new AbstractMap.SimpleEntry<>(type, result);
     }
 
     public void setUpdated(long epoch) {
@@ -485,6 +528,7 @@ public class DBKingdom {
     }
     @Command
     public String getUrl(String myName) {
+        if (myName == null) myName = "__your_name__";
         return "https://trounced.net/kingdom/" + myName + "/search/" + slug;
     }
     @Command
@@ -509,15 +553,144 @@ public class DBKingdom {
     }
     @Command
     public int getAttackMinRange() {
-        return (int) (getScore() * 0.5);
+        return TrounceUtil.getMinScoreRange(getScore(), true);
     }
     @Command
     public int getAttackMaxRange() {
-        return (int) (getScore() * 1.5);
+        return TrounceUtil.getMaxScoreRange(getScore(), true);
     }
 
     @Command
-    public boolean isVacataion() {
+    public boolean isVacation() {
         return vacation_start != 0;
+    }
+
+    public boolean sendDM(String msg) {
+        User user = getUser();
+        if (user == null) return false;
+
+        try {
+            RateLimitUtil.queue(RateLimitUtil.complete(user.openPrivateChannel()).sendMessage(msg));
+        } catch (Throwable e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    public List<DBSpy> getAllSpyops() {
+        return Trocutus.imp().getDB().getDefensiveSpies(id);
+    }
+
+    public List<DBSpy> getAllOffSpyops() {
+        return Trocutus.imp().getDB().getOffensiveSpies(id);
+    }
+
+    public String getKingdomUrlMarkup(String myName, boolean embed) {
+        return MarkupUtil.markdownUrl(slug, getUrl(myName));
+    }
+
+    public String getAllianceUrlMarkup(String slug, boolean embed) {
+        DBAlliance aa = getAlliance();
+        if (aa != null) {
+            String url = aa.getUrl(slug);
+            return MarkupUtil.markdownUrl(slug, url);
+        }
+        return "<none>";
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public Map<Integer, Map.Entry<Long, Rank>> getAllianceHistory() {
+        return Trocutus.imp().getDB().getRemovesByNation(getId());
+    }
+
+    public int getAttackStrength() {
+        DBSpy report = getLatestSpyReport();
+        return report == null ? total_land * 10 : report.attack;
+    }
+
+    public int getDefenseStrength() {
+        DBSpy report = getLatestSpyReport();
+        return report == null ? total_land * 10 : report.defense;
+    }
+
+    public int getAverageStrength() {
+        return (getAttackStrength() + getDefenseStrength()) / 2;
+    }
+
+    public String toMarkdown(String myName, boolean embed) {
+        if (myName == null) myName = "__your_name__";
+        StringBuilder result = new StringBuilder();
+        String url = getUrl("");
+        result.append("<" + url + ">\n");
+
+        User user = getUser();
+        if (user != null) {
+            if (embed) {
+                result.append("user: " + user.getAsMention() + "\n");
+            } else {
+                result.append("user: " + user.getName() + "\n");
+            }
+        }
+        result.append("id: `" + getId() + "`\n");
+        result.append("realm: `" + getRealm().getName() + "`\n");
+        result.append("alliance: `" + getAllianceName() + "`\n");
+        result.append("position: `" + getPosition() + "`\n");
+        result.append("total land: `" + getTotal_land() + "`\n");
+        result.append("alert level: `" + getAlert_level() + "`\n");
+        result.append("resource level: `" + getResource_level() + "`\n");
+        result.append("spell alert: `" + getSpell_alert() + "`\n");
+        result.append("last active: " + DiscordUtil.timestamp(getLast_active(), "R") + "\n");
+        result.append("vacation start: " + DiscordUtil.timestamp(getVacation_start(), "d") + "\n");
+        result.append("hero: `" + getHero() + "`\n");
+        result.append("hero level: `" + getHero_level() + "`\n");
+        result.append("last fetched: " + DiscordUtil.timestamp(getLast_fetched(), "R") + "\n");
+        return result.toString();
+    }
+
+    public void setMeta(KingdomMeta key, byte value) {
+        setMeta(key, new byte[] {value});
+    }
+
+    public void setMeta(KingdomMeta key, int value) {
+        setMeta(key, ByteBuffer.allocate(4).putInt(value).array());
+    }
+
+    public void setMeta(KingdomMeta key, long value) {
+        setMeta(key, ByteBuffer.allocate(8).putLong(value).array());
+    }
+
+    public void setMeta(KingdomMeta key, double value) {
+        setMeta(key, ByteBuffer.allocate(8).putDouble(value).array());
+    }
+
+    public void setMeta(KingdomMeta key, String value) {
+        setMeta(key, value.getBytes(StandardCharsets.ISO_8859_1));
+    }
+
+    public boolean setMetaRaw(int id, byte[] value) {
+        Int2ObjectArrayMap<byte[]> metaCache = getCache(true).metaCache;
+        boolean changed = false;
+        if (metaCache == null) {
+            cache.metaCache = metaCache = new Int2ObjectArrayMap<>();
+            changed = true;
+        } else {
+            byte[] existing = metaCache.get(id);
+            changed = existing == null || !Arrays.equals(existing, value);
+        }
+        if (changed) {
+            metaCache.put(id, value);
+            return true;
+        }
+        return false;
+    }
+
+    public void setMeta(KingdomMeta key, byte... value) {
+        if (setMetaRaw(key.ordinal(), value)) {
+            Trocutus.imp().getDB().setMeta(id, key, value);
+        }
     }
 }
