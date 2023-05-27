@@ -10,6 +10,8 @@ public enum KingdomMeta {
     REFERRER, CURRENT_MENTOR,
     IA_CATEGORY_MAX_STAGE,
     INTERVIEW_CHECKUP,
+
+    LOGIN_NOTIFY
     
     ;
 

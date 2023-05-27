@@ -14,6 +14,8 @@ import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.event.Event;
 import link.locutus.core.event.MainListener;
+import link.locutus.core.event.listener.AllianceListener;
+import link.locutus.core.event.listener.KingdomListener;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.GuildShardManager;
 import link.locutus.util.RateLimitUtil;
@@ -138,6 +140,8 @@ public class Trocutus extends ListenerAdapter {
 
     public void registerEvents() {
         eventBus.register(new MainListener());
+        eventBus.register(new KingdomListener());
+        eventBus.register(new AllianceListener());
     }
 
     public void start() throws InterruptedException {

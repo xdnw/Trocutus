@@ -18,7 +18,11 @@ import link.locutus.command.command.IMessageIO;
 import link.locutus.command.impl.discord.permission.RolePermission;
 import link.locutus.command.impl.discord.permission.WhitelistPermission;
 import link.locutus.core.api.ApiKeyPool;
+import link.locutus.core.api.Auth;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.api.game.AttackOrSpellType;
+import link.locutus.core.api.game.MilitaryUnit;
+import link.locutus.core.db.entities.Activity;
 import link.locutus.core.db.entities.alliance.AllianceList;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -27,11 +31,13 @@ import link.locutus.core.db.entities.kingdom.KingdomAttribute;
 import link.locutus.core.db.entities.kingdom.KingdomList;
 import link.locutus.core.db.entities.kingdom.KingdomPlaceholders;
 import link.locutus.core.db.entities.kingdom.SimpleKingdomList;
+import link.locutus.core.db.entities.spells.SpellOp;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.SheetKeys;
 import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.core.db.guild.entities.Roles;
+import link.locutus.util.ArrayUtil;
 import link.locutus.util.MarkupUtil;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
@@ -245,6 +251,8 @@ public class SheetCommands {
                                @Switch("d") boolean ignoreDNR,
                                @Switch("s") SpreadSheet sheet) throws GeneralSecurityException, IOException {
 
+        Function<DBKingdom, Integer> numOpsFunc = f -> 1; // TODO
+
         if (ignoreWithLootHistory) time = 0;
         if (sheet == null) {
             sheet = SpreadSheet.create(db, SheetKeys.SPYOP_SHEET);
@@ -293,13 +301,13 @@ public class SheetCommands {
 
         // nations with big trades
 
-        Map<DBKingdom, List<Spyop>> targets = new HashMap<>();
+        Map<DBKingdom, List<SpellOp>> targets = new HashMap<>();
 
         ArrayList<DBKingdom> attackersList = new ArrayList<>(attackers);
         Collections.shuffle(attackersList);
 
         for (DBKingdom attacker : attackersList) {
-            int numOps = attacker.hasProject(Projects.INTELLIGENCE_AGENCY) ? 2 : 1;
+            int numOps = numOpsFunc.apply(attacker);
             numOps = Math.min(numOps, maxOps);
 
             outer:
@@ -308,11 +316,10 @@ public class SheetCommands {
                 while (iter.hasNext()) {
                     DBKingdom enemy = iter.next();
                     if (!attacker.isInSpyRange(enemy)) continue;
-                    List<Spyop> currentOps = targets.computeIfAbsent(enemy, f -> new ArrayList<>());
+                    List<SpellOp> currentOps = targets.computeIfAbsent(enemy, f -> new ArrayList<>());
                     if (currentOps.size() > 1) continue;
-                    if (currentOps.size() == 1 && currentOps.get(0).attacker == attacker) continue;
-                    Spyop op = new Spyop(attacker, enemy, 1, SpyCount.Operation.INTEL, 0, 3);
-
+                    if (currentOps.size() == 1 && currentOps.get(0).getAttacker() == attacker) continue;
+                    SpellOp op = new SpellOp(AttackOrSpellType.SPY, attacker, enemy);
                     currentOps.add(op);
                     iter.remove();
                     continue outer;
@@ -342,8 +349,6 @@ public class SheetCommands {
         List<Object> header = new ArrayList<>(Arrays.asList(
                 "nation",
                 "alliance",
-                "\uD83C\uDFD9", // cities
-                "\uD83C\uDFD7", // avg_infra
                 "score",
                 "Mo",
                 "Tu",
@@ -363,9 +368,7 @@ public class SheetCommands {
 
             header.set(0, MarkupUtil.sheetUrl(nation.getName(), TrounceUtil.getUrl(nation.getId(), false)));
             header.set(1, MarkupUtil.sheetUrl(nation.getAllianceName(), TrounceUtil.getUrl(nation.getAlliance_id(), true)));
-            header.set(2, nation.getCities());
-            header.set(3, nation.getAvg_infra());
-            header.set(4, nation.getScore());
+            header.set(3, nation.getTotal_land());
 
             Activity activity;
             if (trackTime == 0) {
@@ -412,19 +415,9 @@ public class SheetCommands {
         }
         StringBuilder response = new StringBuilder();
 
-        Function<DBKingdom, Integer> maxWarsFunc = new Function<DBKingdom, Integer>() {
-            @Override
-            public Integer apply(DBKingdom nation) {
-                int offSlots = 1;
-                if (nation.hasProject(Projects.INTELLIGENCE_AGENCY)) offSlots++;
-                if (dayChange) offSlots *= 2;
-                return offSlots;
-            }
-        };
-
         Function<DBKingdom, Boolean> isValidTarget = n -> filter.contains(n);
 
-        BlitzGenerator.getTargets(sheet, 0, maxWarsFunc, 0.4, 2.5, false, false, true, isValidTarget, new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
+        BlitzGenerator.getTargets(sheet, 0, 0.5, 1.5, false, false, true, isValidTarget, new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
             @Override
             public void accept(Map.Entry<DBKingdom, DBKingdom> dbKingdomDBKingdomEntry, String msg) {
                 response.append(msg + "\n");
@@ -448,7 +441,6 @@ public class SheetCommands {
                               @Arg("Text to prepend to the target instructions being sent")
                               @Default("") String header,
 
-                              @Arg("Send from the api key registered to the guild") @Switch("l") boolean sendFromGuildAccount,
                               @Arg("The api key to use to send the mail") @Switch("a") String apiKey,
                               @Arg("Hide the default blurb from the message")
                               @Switch("b") boolean hideDefaultBlurb,
@@ -456,43 +448,30 @@ public class SheetCommands {
                               @Arg("Send instructions as direct message on discord")
                               @Switch("d") boolean dm) throws IOException, GeneralSecurityException {
 
-        ApiKeyPool.ApiKey myKey = me.getApiKey(false);
-        ApiKeyPool key = null;
-        if (apiKey != null) {
-            Integer nation = Trocutus.imp().getDB().getKingdomFromApiKey(apiKey);
-            if (nation == null) return "Invalid API key";
-            key = ApiKeyPool.create(nation, apiKey);
-        }
-        if (key == null) {
-            if ((sendFromGuildAccount || myKey == null)) {
-                key = db.getMailKey();
-            } else {
-                key = ApiKeyPool.builder().addKey(myKey).build();
-            }
-        }
-        if (key == null){
-            return "No api key found. Please use" + CM.credentials.addApiKey.cmd.toSlashMention() + " or specify `sendFromGuildAccount` or `apiKey` in the command";
+        Auth auth = db.getMailAuth();
+        if (auth == null){
+            return "No api key found. Please use" + "CM.credentials.login.cmd.toSlashMention()";
         }
 
         if (header != null && !header.isEmpty() && !Roles.MAIL.has(author, guild)) {
-            return "You need the MAIL role on discord (see " + CM.role.setAlias.cmd.toSlashMention() + ") to add the custom message: `" + header + "`";
+            return "You need the MAIL role on discord (see " + "CM.role.setAlias.cmd.toSlashMention()" + ") to add the custom message: `" + header + "`";
         }
         Map<DBKingdom, Set<DBKingdom>> warDefAttMap = new HashMap<>();
         Map<DBKingdom, Set<DBKingdom>> spyDefAttMap = new HashMap<>();
-        Map<DBKingdom, Set<Spyop>> spyOps = new HashMap<>();
+        Map<DBKingdom, Set<SpellOp>> spyOps = new HashMap<>();
 
         if (dm && !Roles.MAIL.hasOnRoot(author)) return "You do not have permission to dm users";
 
         if (blitzSheet != null) {
-            warDefAttMap = BlitzGenerator.getTargets(blitzSheet, 0, f -> 3, 0.75, 1.75, true, true, false, f -> true, (a, b) -> {});
+            warDefAttMap = BlitzGenerator.getTargets(blitzSheet, 0, f -> 1, 0.5, 1.5, true, true, false, f -> true, (a, b) -> {});
         }
 
         if (spySheet != null) {
             try {
-                spyDefAttMap = BlitzGenerator.getTargets(spySheet, 0, f -> 3, 0.4, 2.5, false, false, true, f -> true, (a, b) -> {});
+                spyDefAttMap = BlitzGenerator.getTargets(spySheet, 0, f -> 1, 0.5, 1.5, false, false, true, f -> true, (a, b) -> {});
                 spyOps = SpyBlitzGenerator.getTargets(spySheet, 0);
             } catch (NullPointerException e) {
-                spyDefAttMap = BlitzGenerator.getTargets(spySheet, 4, f -> 3, 0.4, 2.5, false, false, true, f -> true, (a, b) -> {});
+                spyDefAttMap = BlitzGenerator.getTargets(spySheet, 4, f -> 1, 0.5, 1.5, false, false, true, f -> true, (a, b) -> {});
                 spyOps = SpyBlitzGenerator.getTargets(spySheet, 4);
             }
         }
@@ -530,7 +509,7 @@ public class SheetCommands {
             if (!allowedKingdoms.contains(attacker)) continue;
 
             List<DBKingdom> myAttackOps = new ArrayList<>(warAttDefMap.getOrDefault(attacker, Collections.emptySet()));
-            List<Spyop> mySpyOps = new ArrayList<>(spyOps.getOrDefault(attacker, Collections.emptySet()));
+            List<SpellOp> mySpyOps = new ArrayList<>(spyOps.getOrDefault(attacker, Collections.emptySet()));
             if (myAttackOps.isEmpty() && mySpyOps.isEmpty()) continue;
 
             sent++;
@@ -551,7 +530,7 @@ public class SheetCommands {
                 for (int i = 0; i < myAttackOps.size(); i++) {
                     totalWarTargets++;
                     DBKingdom defender = myAttackOps.get(i);
-                    mail.append((i + 1) + ". War Target: " + MarkupUtil.htmlUrl(defender.getName(), defender.getKingdomUrl()) + "\n");
+                    mail.append((i + 1) + ". War Target: " + MarkupUtil.htmlUrl(defender.getName(), defender.getUrl(attacker.getSlug())) + "\n");
                     mail.append(getStrengthInfo(defender) + "\n"); // todo
 
                     Set<DBKingdom> others = new LinkedHashSet<>(warDefAttMap.get(defender));
@@ -569,54 +548,39 @@ public class SheetCommands {
 
             if (!mySpyOps.isEmpty()) {
                 int intelOps = 0;
-                int killSpies = 0;
-//                int missileNuke = 0;
-                double cost = 0;
-                for (Spyop op : mySpyOps) {
-                    if (op.operation == SpyCount.Operation.INTEL) intelOps++;
-                    if (op.operation == SpyCount.Operation.SPIES) killSpies++;
-//                    if (op.operation == SpyCount.Operation.MISSILE && op.defender.getMissiles() <= 4) missileNuke++;
-//                    if (op.operation == SpyCount.Operation.NUKE && op.defender.getNukes() <= 4) missileNuke++;
-                    else
-                        cost += SpyCount.opCost(op.spies, op.safety);
+                int spelOps = 0;
+                int attackops = 0;
+                Map<MilitaryUnit, Long> cost = new HashMap<>();
+
+                for (SpellOp op : mySpyOps) {
+                    if (op.getType() == AttackOrSpellType.SPY) intelOps++;
+                    else if (op.getType() == AttackOrSpellType.ATTACK) attackops++;
+                    else spelOps++;
+
+                    cost = ArrayUtil.add(cost, op.getType().getDefaultCost());
                 }
 
                 mail.append("\n");
-                mail.append("Espionage targets: (costs >$" + MathMan.format(cost) + ")\n");
+                mail.append("Espionage targets: (costs: " + TrounceUtil.resourcesToString(cost) + ")\n");
 
                 if (intelOps == 0) {
-                    mail.append("- These are NOT gather intelligence ops. XD\n");
-                    mail.append("- If these targets don't work, reply with the word `more` and i'll send you some more targets\n");
-                }
-                if (killSpies != 0) {
-                    mail.append("- If selecting (but not executing) 1 spy on quick (gather intel) yields >50% odds, it means the enemy has no spies left.\n");
-                    mail.append("- If an enemy has 0 spies, you can use 5|spies|quick (99%) for killing units.\n");
+                    mail.append("- These are NOT gather intelligence ops.\n");
                 }
 
                 if (intelOps != myAttackOps.size()) {
-                    mail.append("- Results may be outdated when you read it, so check they still have units to spy!\n");
+                    mail.append("- Results may be outdated when you read it, so check they still have units to spell!\n");
                 }
 
-                mail.append(
-                        "- If the op doesn't require it (and it says >50%), you don't have to use more spies or covert\n" +
-                                "- Reply to this message with any spy reports you do against enemies (even if not these targets)\n" +
-                                "- Remember to buy spies every day :D\n\n");
 
-                String baseUrl = "https://politicsandwar.com/nation/espionage/eid=";
                 for (int i = 0; i < mySpyOps.size(); i++) {
                     totalSpyTargets++;
-                    Spyop spyop = mySpyOps.get(i);
-                    String safety = spyop.safety == 3 ? "covert" : spyop.safety == 2 ? "normal" : "quick";
+                    SpellOp spyop = mySpyOps.get(i);
 
-                    String name = spyop.defender.getKingdom() + " | " + spyop.defender.getAllianceName();
-                    String nationUrl = MarkupUtil.htmlUrl(name, "https://tinyurl.com/y26weu7d/id=" + spyop.defender.getKingdom_id());
+                    String name = spyop.getTarget().getName() + " | " + spyop.getTarget().getAllianceName();
+                    String nationUrl = MarkupUtil.htmlUrl(name, spyop.getTarget().getUrl(attacker.getSlug()));
 
-                    String spyUrl = baseUrl + spyop.defender.getKingdom_id();
-                    String attStr = spyop.operation.name() + "|" + safety + "|" + spyop.spies + "\"";
                     mail.append((i + 1) + ". " + nationUrl + " | ");
-                    if (spyop.operation != SpyCount.Operation.INTEL) mail.append("kill ");
-                    else mail.append("gather ");
-                    mail.append(spyop.operation.name().toLowerCase() + " using " + spyop.spies + " spies on " + safety);
+                    mail.append(spyop.getType());
 
                     mail.append("\n");
                 }
@@ -655,7 +619,11 @@ public class SheetCommands {
             String body = entry.getValue().getValue();
 
             try {
-                attacker.sendMail(key, subject, body);
+                DBKingdom sender = auth.getKingdom(attacker.getRealm_id());
+                if (sender == null) {
+                    throw new IllegalStateException("Could not find sender for realm " + attacker.getRealm_id());
+                }
+                auth.sendMail(sender.getId(), attacker, subject, body);
             } catch (Throwable e) {
                 mailErrors.put(attacker, (e.getMessage() + " ").split("\n")[0]);
                 continue;
@@ -729,7 +697,7 @@ public class SheetCommands {
         StringBuilder response = new StringBuilder();
         Integer finalMaxWars = maxWars;
         if (headerRow == null) headerRow = 0;
-        BlitzGenerator.getTargets(sheet, headerRow, f -> finalMaxWars, 0.75, 1.75, true, true, false, isValidTarget, new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
+        BlitzGenerator.getTargets(sheet, headerRow, f -> finalMaxWars, 0.5, 1.5, true, true, false, isValidTarget, new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
             @Override
             public void accept(Map.Entry<DBKingdom, DBKingdom> dbKingdomDBKingdomEntry, String msg) {
                 response.append(msg + "\n");
@@ -826,15 +794,13 @@ public class SheetCommands {
         List<Object> header = new ArrayList<>(Arrays.asList(
                 "alliance",
                 "nation",
-                "cities",
-                "infra",
-                "soldiers",
-                "tanks",
-                "planes",
-                "ships",
-                "spies",
-                "score",
-                "beige",
+                "land",
+                "attack_str",
+                "defend_str",
+                "average_str",
+                "resource_level",
+                "alert_level",
+                "spell_alert_level",
                 "inactive",
                 "login_chance",
                 "weekly_activity",
@@ -849,19 +815,16 @@ public class SheetCommands {
             DBKingdom defender = entry.getKey();
             List<DBKingdom> attackers = entry.getValue();
             ArrayList<Object> row = new ArrayList<>();
-            row.add(MarkupUtil.sheetUrl(defender.getAllianceName(), defender.getAllianceUrl()));
-            row.add(MarkupUtil.sheetUrl(defender.getName(), defender.getKingdomUrl()));
+            row.add(MarkupUtil.sheetUrl(defender.getAllianceName(), defender.getAllianceUrl(null)));
+            row.add(MarkupUtil.sheetUrl(defender.getName(), defender.getUrl(null)));
 
-            row.add(defender.getCities());
-            row.add(defender.getAvg_infra());
-            row.add(defender.getSoldiers() + "");
-            row.add(defender.getTanks() + "");
-            row.add(defender.getAircraft() + "");
-            row.add(defender.getShips() + "");
-            row.add(defender.getSpies() + "");
-
-            row.add(defender.getScore() + "");
-            row.add(defender.getBeigeTurns() + "");
+            row.add(defender.getTotal_land());
+            row.add(defender.getAttackStrength());
+            row.add(defender.getDefenseStrength());
+            row.add(defender.getAverageStrength());
+            row.add(defender.getResource_level() + "");
+            row.add(defender.getAlert_level() + "");
+            row.add(defender.getSpell_alert() + "");
             row.add(TimeUtil.secToTime(TimeUnit.MINUTES, defender.getActive_m()));
 
             Activity activity = defender.getActivity(12 * 7 * 2);
@@ -873,7 +836,7 @@ public class SheetCommands {
 
             for (int i = 0; i < myCounters.size(); i++) {
                 DBKingdom counter = myCounters.get(i);
-                String counterUrl = MarkupUtil.sheetUrl(counter.getName(), counter.getKingdomUrl());
+                String counterUrl = MarkupUtil.sheetUrl(counter.getName(), counter.getUrl(null));
                 row.add(counterUrl);
             }
             RowData myRow = SheetUtil.toRowData(row);
@@ -899,17 +862,17 @@ public class SheetCommands {
         StringBuilder note = new StringBuilder();
 
         double score = nation.getScore();
-        double minScore = Math.ceil(nation.getScore() * 0.75);
-        double maxScore = Math.floor(nation.getScore() * 1.75);
+        double minScore = Math.ceil(nation.getScore() * 0.5);
+        double maxScore = Math.floor(nation.getScore() * 1.5);
         note.append("War Range: " + MathMan.format(minScore) + "-" + MathMan.format(maxScore) + " (" + score + ")").append("\n");
         note.append("ID: " + nation.getId()).append("\n");
         note.append("Alliance: " + nation.getAllianceName()).append("\n");
-        note.append("Cities: " + nation.getCities()).append("\n");
-        note.append("avg_infra: " + nation.getAvg_infra()).append("\n");
-        note.append("soldiers: " + nation.getSoldiers()).append("\n");
-        note.append("tanks: " + nation.getTanks()).append("\n");
-        note.append("aircraft: " + nation.getAircraft()).append("\n");
-        note.append("ships: " + nation.getShips()).append("\n");
+        note.append("Score: " + nation.getScore()).append("\n");
+        note.append("Attack: " + nation.getAttackStrength()).append("\n");
+        note.append("Defense: " + nation.getDefenseStrength()).append("\n");
+        note.append("Abundance: " + nation.getResource_level()).append("\n");
+        note.append("Alert: " + nation.getAlert_level()).append("\n");
+        note.append("SpellAlert: " + nation.getSpell_alert()).append("\n");
         return note.toString();
     }
 
@@ -922,11 +885,8 @@ public class SheetCommands {
                           @Arg("Kingdoms to counter with\n" +
                                   "Default: This guild's alliance nations")
                           @Default Set<DBKingdom> counterWith,
-                          @Arg("Show counters from nations at max offensive wars\n" +
-                                  "i.e. They can counter when they finish a war")
-                          @Switch("o") boolean allowAttackersWithMaxOffensives,
-                          @Arg("Remove countering nations weaker than the enemy")
-                          @Switch("w") boolean filterWeak,
+                          @Arg("Allow countering nations weaker than the enemy")
+                          @Switch("w") boolean allowWeak,
                           @Arg("Remove countering nations that are inactive (2 days)")
                           @Switch("a") boolean onlyActive,
                           @Arg("Remove countering nations NOT registered with Trocutus")
@@ -940,35 +900,46 @@ public class SheetCommands {
             if (aaIds.isEmpty()) {
                 Set<Integer> allies = db.getAllies(true);
                 if (allies.isEmpty()) {
-                    if (me.getAlliance_id() == 0) return "No alliance or allies are set.\n" + GuildKey.ALLIANCE_ID.getCommandMention() + "\nOR\n " + CM.coalition.create.cmd.create(null, Coalition.ALLIES.name()) + "";
-                    aaIds = new HashSet<>(Arrays.asList(me.getAlliance_id()));
-                    counterWith = new HashSet<>(new AllianceList(aaIds).getKingdoms(true, 10000, true));
+                    return "No alliance or allies are set.\n" + GuildKey.ALLIANCE_ID.getCommandMention() + "\nOR\n " + "CM.coalition.create.cmd.create(null, Coalition.ALLIES.name())" + "";
                 } else {
-                    counterWith = new HashSet<>(Trocutus.imp().getDB().getKingdoms(allies));
+                    counterWith = new HashSet<>(Trocutus.imp().getDB().getKingdomsMatching(f -> allies.contains(f.getAlliance_id()));
                 }
             } else {
-                counterWith = new HashSet<>(new AllianceList(aaIds).getKingdoms(true, 10000, true));
+                counterWith = new HashSet<>(Trocutus.imp().getDB().getKingdomsMatching(f -> aaIds.contains(f.getAlliance_id())));
             }
         }
-        counterWith.removeIf(f -> f.isVacation() == true || f.getActive_m() > 10000 || f.getPosition().ordinal() <= Rank.APPLICANT.ordinal() || (f.getCities() < 10 && f.getActive_m() > 4880));
+        counterWith.removeIf(f -> f.isVacation() == true || f.getActive_m() > 10000 || f.getPosition().ordinal() <= Rank.APPLICANT.ordinal());
         if (requireDiscord) counterWith.removeIf(f -> f.getUser() == null);
 
         double score = target.getScore();
-        double scoreMin = score / 1.75;
-        double scoreMax = score / 0.75;
+        double scoreMin = score / 1.5;
+        double scoreMax = score / 0.5;
 
-        for (DBWar activeWar : target.getActiveWars()) {
-            counterWith.remove(activeWar.getKingdom(!activeWar.isAttacker(target)));
-        }
-
-        if (onlyActive) counterWith.removeIf(f -> !f.isOnline());
+        if (onlyActive) counterWith.removeIf(f -> {
+            if (f.getActive_m() < 60) return false;
+            User user = f.getUser();
+            if (user == null) return true;
+            for (Guild mutualGuild : user.getMutualGuilds()) {
+                Member member = mutualGuild.getMember(user);
+                if (member != null) {
+                    return switch (member.getOnlineStatus()) {
+                        case ONLINE -> false;
+                        case IDLE -> true;
+                        case DO_NOT_DISTURB -> true;
+                        case INVISIBLE -> true;
+                        case OFFLINE -> true;
+                        case UNKNOWN -> true;
+                        default -> true;
+                    };
+                }
+            }
+            return true;
+        });
         counterWith.removeIf(nation -> nation.getScore() < scoreMin || nation.getScore() > scoreMax);
-        if (!allowAttackersWithMaxOffensives) counterWith.removeIf(nation -> nation.getOff() >= nation.getMaxOff());
         counterWith.removeIf(nation -> nation.getAlliance_id() == 0);
         counterWith.removeIf(nation -> nation.getActive_m() > TimeUnit.DAYS.toMinutes(2));
         counterWith.removeIf(nation -> nation.isVacation());
-        counterWith.removeIf(f -> f.getAircraft() < target.getAircraft() * 0.6 && target.getAircraft() > 100);
-        if (filterWeak) counterWith.removeIf(nation -> nation.getStrength() < target.getStrength());
+        if (!allowWeak) counterWith.removeIf(f -> f.getAttackStrength() < f.getDefenseStrength());
         Set<Integer> counterWithAlliances = counterWith.stream().map(DBKingdom::getAlliance_id).collect(Collectors.toSet());
         if (counterWithAlliances.size() == 1 && !allowSameAlliance && counterWithAlliances.contains(target.getAlliance_id())) {
             return "Please enable `-s allowSameAlliance` to counter with the same alliance";
@@ -976,18 +947,14 @@ public class SheetCommands {
         if (!allowSameAlliance) counterWith.removeIf(nation -> nation.getAlliance_id() == target.getAlliance_id());
 
         List<DBKingdom> attackersSorted = new ArrayList<>(counterWith);
-        if (filterWeak) {
-            attackersSorted = CounterGenerator.generateCounters(db, target, attackersSorted, allowAttackersWithMaxOffensives);
-        } else {
-            attackersSorted = CounterGenerator.generateCounters(db, target, attackersSorted, allowAttackersWithMaxOffensives, false);
-        }
+        attackersSorted = CounterGenerator.generateCounters(db, target, attackersSorted);
 
         if (attackersSorted.isEmpty()) {
             return "No nations available to counter";
         }
 
         StringBuilder response = new StringBuilder();
-        response.append("**Enemy: **").append(target.toMarkdown()).append("\n**Counters**\n");
+        response.append("**Enemy: **").append(target.toMarkdown(null, false)).append("\n**Counters**\n");
 
         int count = 0;
         int maxResults = 25;
@@ -1016,7 +983,7 @@ public class SheetCommands {
                 if (ping) response.append(user.getAsMention());
                 else response.append("`" + user.getAsMention() + "` ");
             }
-            response.append(nation.toMarkdown()).append('\n');
+            response.append(nation.toMarkdown(null, false)).append('\n');
         }
 
         return response.toString();

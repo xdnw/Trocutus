@@ -10,6 +10,7 @@ import link.locutus.command.command.StringMessageIO;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.ResourceLevel;
+import link.locutus.core.db.entities.Activity;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.spells.DBSpy;
@@ -245,6 +246,7 @@ public class DBKingdom implements KingdomOrAlliance {
     private HeroType hero;
     private int hero_level;
     private long last_fetched;
+    private Int2ObjectArrayMap<byte[]> metaCache;
 
     public DBKingdom(int id, int realmId, int allianceId, Rank permission, String name, String slug, int totalLand, int alertLevel, int resourceLevel, int spellAlert, long lastActive, long vacationStart, HeroType hero, int heroLevel, long last_fetched) {
         this.id = id;
@@ -604,7 +606,7 @@ public class DBKingdom implements KingdomOrAlliance {
     }
 
     public Map<Integer, Map.Entry<Long, Rank>> getAllianceHistory() {
-        return Trocutus.imp().getDB().getRemovesByNation(getId());
+        return Trocutus.imp().getDB().getRemovesByKingdom(getId());
     }
 
     public int getAttackStrength() {
@@ -672,10 +674,9 @@ public class DBKingdom implements KingdomOrAlliance {
     }
 
     public boolean setMetaRaw(int id, byte[] value) {
-        Int2ObjectArrayMap<byte[]> metaCache = getCache(true).metaCache;
         boolean changed = false;
         if (metaCache == null) {
-            cache.metaCache = metaCache = new Int2ObjectArrayMap<>();
+            metaCache = new Int2ObjectArrayMap<>();
             changed = true;
         } else {
             byte[] existing = metaCache.get(id);
@@ -691,6 +692,104 @@ public class DBKingdom implements KingdomOrAlliance {
     public void setMeta(KingdomMeta key, byte... value) {
         if (setMetaRaw(key.ordinal(), value)) {
             Trocutus.imp().getDB().setMeta(id, key, value);
+        }
+    }
+
+    public Map.Entry<Integer, Rank> getPreviousAlliance() {
+        Long lastTime = null;
+        Rank lastRank = null;
+        Integer lastAAId = null;
+        for (Map.Entry<Integer, Map.Entry<Long, Rank>> entry : getAllianceHistory().entrySet()) {
+            Map.Entry<Long, Rank> timeRank = entry.getValue();
+            Rank rank = timeRank.getValue();
+            if (rank.ordinal() <= Rank.APPLICANT.ordinal()) continue;
+            int aaId = entry.getKey();
+            if (aaId == 0 || aaId == alliance_id) continue;
+            if (lastTime == null || timeRank.getKey() >= lastTime) {
+                lastTime = timeRank.getKey();
+                lastRank = rank;
+                lastAAId = aaId;
+            }
+        }
+        if (lastTime == null) return null;
+        return new AbstractMap.SimpleEntry<>(lastAAId, lastRank);
+    }
+
+    public List<DBAttack> getRecentAttacks(long millis) {
+        long cutoff = System.currentTimeMillis() - millis;
+        return Trocutus.imp().getDB().getAttacks(f -> f.date > cutoff && (f.attacker_id == id || f.defender_id == id));
+    }
+
+    public Activity getActivity() {
+        return new Activity(getId());
+    }
+
+    public Activity getActivity(long turns) {
+        return new Activity(getId(), turns);
+    }
+
+    public Map.Entry<Double, Boolean> getIntelOpValue(long time) {
+        DBSpy spy = getLatestSpyReport();
+        long lastLogin = getLast_active();
+        double value;
+        boolean hasLoot = false;
+        if (spy == null) {
+            value = ((long) Integer.MAX_VALUE) + getResource_level().ordinal();
+        } else {
+            if (spy.date > System.currentTimeMillis() - time) {
+                return null;
+            }
+            hasLoot = true;
+            DBAttack def = getLatestDefensive();
+            long max = lastLogin;
+            if (def != null) max = Math.max(max, def.date);
+            value = max - spy.date;
+        }
+        return Map.entry(value, hasLoot);
+    }
+
+    public boolean isInSpyRange(DBKingdom enemy) {
+        return enemy.getScore() >= getAttackMinRange() && enemy.getScore() <= getAttackMaxRange();
+    }
+
+    public String getAllianceUrl(String slug) {
+        DBAlliance aa = getAlliance();
+        return aa == null ? null : aa.getUrl(slug);
+    }
+
+    public Map<Long, Long> getLoginNotifyMap() {
+        ByteBuffer existing = getMeta(KingdomMeta.LOGIN_NOTIFY);
+        Map<Long, Long> existingMap = new LinkedHashMap<>();
+        if (existing != null) {
+            while (existing.hasRemaining()) {
+                existingMap.put(existing.getLong(), existing.getLong());
+            }
+        } else {
+            return null;
+        }
+        existingMap.entrySet().removeIf(e -> e.getValue() < System.currentTimeMillis() - TimeUnit.DAYS.toMillis(5));
+        return existingMap;
+    }
+
+    public ByteBuffer getMeta(KingdomMeta key) {
+        if (metaCache == null) {
+            return null;
+        }
+        byte[] result = metaCache.get(key.ordinal());
+        return result == null ? null : ByteBuffer.wrap(result);
+    }
+
+    public void setLoginNotifyMap(Map<Long, Long> map) {
+        ByteBuffer buffer = ByteBuffer.allocate(map.size() * 16);
+        map.forEach((k, v) -> buffer.putLong(k).putLong(v));
+        setMeta(KingdomMeta.LOGIN_NOTIFY, buffer.array());
+    }
+
+    public void deleteMeta(KingdomMeta key) {
+        if (metaCache != null) {
+            if (metaCache.remove(key.ordinal()) != null) {
+                Trocutus.imp().getDB().deleteMeta(id, key);
+            }
         }
     }
 }

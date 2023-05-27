@@ -1215,4 +1215,14 @@ public class GuildDB extends DBMain implements KingdomOrAllianceOrGuild {
         }
         return result;
     }
+
+    public Set<String> findCoalitions(int aaId) {
+        Set<String> coalitions = new LinkedHashSet<>();
+        for (Map.Entry<String, Set<Integer>> entry : getCoalitions().entrySet()) {
+            if (entry.getValue().contains(aaId)) {
+                coalitions.add(entry.getKey());
+            }
+        }
+        return coalitions;
+    }
 }

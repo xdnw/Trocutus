@@ -11,6 +11,7 @@ import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.kingdom.KingdomLootType;
+import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.db.guild.key.GuildSetting;
@@ -27,14 +28,32 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class AdminCommands {
     @Command(aliases = {"setloot"})
     @RolePermission(value = Roles.ADMIN, root = true)
-    public String setUnits(@Me IMessageIO channel, @Me Map<DBRealm, DBKingdom> me, DBKingdom nation, Map<MilitaryUnit, Long> units, @Default("API") KingdomLootType type) {
-        Trocutus.imp().getDB().saveLoot(nation.getId(), System.currentTimeMillis(), units);
+    public String setUnits(@Me IMessageIO channel, @Me Map<DBRealm, DBKingdom> me, DBKingdom nation, Map<MilitaryUnit, Long> units, int attack, int defense) {
+        // int id, int attackerId, int attackerAa, int protectedGold, int gold, int attack, int defense, int soldiers, int cavalry, int archers, int elites, int defenderId, int defenderAa, long date
+        DBSpy op = new DBSpy(
+                0,
+                0,
+                0,
+                0,
+                units.getOrDefault(MilitaryUnit.GOLD, 0L).intValue(),
+                attack,
+                defense,
+                units.getOrDefault(MilitaryUnit.SOLDIER, 0L).intValue(),
+                units.getOrDefault(MilitaryUnit.CAVALRY, 0L).intValue(),
+                units.getOrDefault(MilitaryUnit.ARCHER, 0L).intValue(),
+                units.getOrDefault(MilitaryUnit.ELITE, 0L).intValue(),
+                nation.getId(),
+                nation.getAlliance_id(),
+                System.currentTimeMillis()
+        );
+        Trocutus.imp().getDB().saveSpyOps(List.of(op), false);
         return "Set " + nation.getName() + " to " + StringMan.getString(units);
     }
 

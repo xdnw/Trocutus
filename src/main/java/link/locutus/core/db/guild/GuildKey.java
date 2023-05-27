@@ -9,9 +9,11 @@ import link.locutus.core.api.Auth;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.kingdom.KingdomFilter;
 import link.locutus.core.db.guild.entities.AutoNickOption;
 import link.locutus.core.db.guild.entities.AutoRoleOption;
 import link.locutus.core.db.guild.entities.Coalition;
+import link.locutus.core.db.guild.entities.EnemyAlertChannelMode;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.db.guild.key.GuildBooleanSetting;
 import link.locutus.core.db.guild.key.GuildCategorySetting;
@@ -608,6 +610,86 @@ public class GuildKey {
             return "The name or id of the CATEGORY you would like " + "CM.channel.close.current.cmd.toSlashMention()" + " to move channels to";
         }
     }.setupRequirements(f -> f.requireValidAlliance().requires(INTERVIEW_PENDING_ALERTS));
+
+    public static GuildSetting<MessageChannel> TREATY_ALERTS = new GuildChannelSetting(GuildSettingCategory.FOREIGN_AFFAIRS) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String TREATY_ALERTS(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return TREATY_ALERTS.setAndValidate(db, user, channel);
+        }
+        @Override
+        public String help() {
+            return "The #channel to receive alerts for treaty changes";
+        }
+    }.setupRequirements(f -> f.requireActiveGuild());
+
+    public static GuildSetting<MessageChannel> ENEMY_ALERT_CHANNEL = new GuildChannelSetting(GuildSettingCategory.BEIGE_ALERTS) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String ENEMY_ALERT_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return ENEMY_ALERT_CHANNEL.setAndValidate(db, user, channel);
+        }
+
+        @Override
+        public String help() {
+            return "The #channel to receive alerts when an enemy nation leaves beige";
+        }
+    }.setupRequirements(f -> f.requires(ALLIANCE_ID).requiresCoalition(Coalition.ENEMIES).requireValidAlliance().requireActiveGuild());
+    public static GuildSetting<EnemyAlertChannelMode> ENEMY_ALERT_CHANNEL_MODE = new GuildEnumSetting<EnemyAlertChannelMode>(GuildSettingCategory.BEIGE_ALERTS, EnemyAlertChannelMode.class) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String ENEMY_ALERT_CHANNEL_MODE(@Me GuildDB db, @Me User user, EnemyAlertChannelMode mode) {
+            return ENEMY_ALERT_CHANNEL_MODE.setAndValidate(db, user, mode);
+        }
+        @Override
+        public String help() {
+            return "The mode for the enemy alert channel to determine what alerts are posted and who is pinged\n" +
+                    "Options:\n- " + StringMan.join(EnemyAlertChannelMode.values(), "\n- ");
+        }
+    }.setupRequirements(f -> f.requires(ENEMY_ALERT_CHANNEL));
+
+    public static GuildSetting<KingdomFilter> ENEMY_ALERT_FILTER = new GuildSetting<KingdomFilter>(GuildSettingCategory.BEIGE_ALERTS, KingdomFilter.class) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String ENEMY_ALERT_FILTER(@Me GuildDB db, @Me User user, KingdomFilter filter) {
+            return ENEMY_ALERT_FILTER.setAndValidate(db, user, filter);
+        }
+
+        @Override
+        public String toString(KingdomFilter value) {
+            return value.getFilter();
+        }
+
+        @Override
+        public String help() {
+            return "A filter for enemies to alert on when they leave beige\n" +
+                    "Defaults to `#active_m<7200` (active in the past 5 days)";
+        }
+    }.setupRequirements(f -> f.requires(ENEMY_ALERT_CHANNEL));
+
+    public static GuildSetting<MessageChannel> AA_ADMIN_LEAVE_ALERTS = new GuildChannelSetting(GuildSettingCategory.GAME_ALERTS) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String AA_ADMIN_LEAVE_ALERTS(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return AA_ADMIN_LEAVE_ALERTS.setAndValidate(db, user, channel);
+        }
+        @Override
+        public String help() {
+            return "The #channel to receive alerts when officers leave an alliance";
+        }
+    }.setupRequirements(f -> f.requireActiveGuild());
+
+    public static GuildSetting<MessageChannel> DELETION_ALERT_CHANNEL = new GuildChannelSetting(GuildSettingCategory.GAME_ALERTS) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String DELETION_ALERT_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return DELETION_ALERT_CHANNEL.setAndValidate(db, user, channel);
+        }
+        @Override
+        public String help() {
+            return "The #channel to receive alerts when kingdoms delete";
+        }
+    }.setupRequirements(f -> f.requireActiveGuild());
 
     private static final Map<String, GuildSetting> BY_NAME = new HashMap<>();
 

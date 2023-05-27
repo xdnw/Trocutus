@@ -6,12 +6,16 @@ import link.locutus.core.api.alliance.AllianceMetric;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.guild.GuildDB;
+import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.event.alliance.AllianceCreateEvent;
+import link.locutus.util.AlertUtil;
 import link.locutus.util.DiscordUtil;
 import link.locutus.util.MarkupUtil;
 import link.locutus.util.StringMan;
 import link.locutus.util.TimeUtil;
+import link.locutus.util.TrounceUtil;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 
 import java.util.HashMap;
@@ -22,14 +26,22 @@ import java.util.function.BiConsumer;
 
 public class AllianceListener {
 
-    @Subscribe
-    public void turnChangeEvent(TurnChangeEvent event) {
-        AllianceMetric.update(80);
+    public AllianceListener() {
+        Trocutus.imp().getScheduler().scheduleAtFixedRate(new Runnable() {
+            private long lastTurn = 0;
+            @Override
+            public void run() {
+                if (TimeUtil.getTurn() != lastTurn) {
+                    lastTurn = TimeUtil.getTurn();
+                    AllianceMetric.update();
+                }
+            }
+        }, 60, 1, TimeUnit.MINUTES);
     }
 
     @Subscribe
     public void onNewAlliance(AllianceCreateEvent event) {
-        DBAlliance alliance = event.getCurrent();
+        DBAlliance alliance = event.getTo();
         int aaId = alliance.getId();
 
         Set<DBKingdom> members = alliance.getKingdoms();
@@ -38,14 +50,14 @@ public class AllianceListener {
         StringBuilder body = new StringBuilder();
 
         for (DBKingdom member : members) {
-            if (member.getPosition().ordinal() < Rank.HEIR.id) continue;
+            if (member.getPosition().ordinal() < Rank.ADMIN.ordinal()) continue;
             Map.Entry<Integer, Rank> lastAA = member.getPreviousAlliance();
 
-            body.append("Leader: " + MarkupUtil.markdownUrl(member.getKingdom(), member.getKingdomUrl()) + "\n");
+            body.append("Leader: " + MarkupUtil.markdownUrl(member.getName(), member.getUrl(null)) + "\n");
 
             if (lastAA != null) {
-                String previousAAName = Trocutus.imp().getDB().getAllianceName(lastAA.getKey());
-                body.append("- " + member.getKingdom() + " previously " + lastAA.getValue() + " in " + previousAAName + "\n");
+                String previousAAName = TrounceUtil.getAllianceName(lastAA.getKey());
+                body.append("- " + member.getName() + " previously " + lastAA.getValue() + " in " + previousAAName + "\n");
 
                 GuildDB db = Trocutus.imp().getRootCoalitionServer();
                 if (db != null) {
@@ -57,8 +69,8 @@ public class AllianceListener {
             }
 
             Map<Integer, Integer> wars = new HashMap<>();
-            for (DBWar activeWar : member.getRecentWars(TimeUnit.DAYS.toMillis(1))) {
-                int otherAA = activeWar.attacker_id == member.getKingdom_id() ? activeWar.defender_aa : activeWar.attacker_aa;
+            for (DBAttack activeWar : member.getRecentAttacks(TimeUnit.DAYS.toMillis(1))) {
+                int otherAA = activeWar.attacker_id == member.getId() ? activeWar.defender_aa : activeWar.attacker_aa;
                 if (otherAA == 0) continue;
                 wars.put(otherAA, wars.getOrDefault(otherAA, 0) + 1);
             }

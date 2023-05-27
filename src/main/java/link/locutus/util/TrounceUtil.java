@@ -88,4 +88,48 @@ public class TrounceUtil {
             }
         }
     }
+
+    public static String getMarkdownUrl(int id, boolean isAA) {
+        return MarkupUtil.markdownUrl(getName(id, isAA), getUrl(id, isAA));
+    }
+
+    public static String getUrl(int id, boolean isAA) {
+        if (isAA) {
+            DBAlliance aa = DBAlliance.get(id);
+            if (aa != null) {
+                return aa.getUrl(null);
+            } else {
+                return "AA:" + id;
+            }
+        } else {
+            DBKingdom kingdom = DBKingdom.get(id);
+            if (kingdom != null) {
+                return kingdom.getUrl(null);
+            } else {
+                return "" + id;
+            }
+        }
+    }
+
+    public double getFeyLand(int myLand, int attack) {
+        if (myLand < 20000) {
+            return Math.sqrt(20000 * attack / 20d);
+        } else if (myLand < 50000) {
+            return Math.sqrt(20000 * 20 + 30000 * (attack - 20) / 20d);
+        } else {
+            return attack / 40d;
+        }
+    }
+
+    public double getFeyDPA(int land) {
+        double dpa;
+        if (land < 20000) {
+            dpa = 20 * land / 20000d;
+        } else if (land <= 50000) {
+            dpa = 20 + 20 * (land - 20000) / 30000d;
+        } else {
+            dpa = 40;
+        }
+        return Math.max(3, dpa);
+    }
 }

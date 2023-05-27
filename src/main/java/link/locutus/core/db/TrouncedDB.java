@@ -7,6 +7,8 @@ import com.ptsmods.mysqlw.table.ColumnType;
 import com.ptsmods.mysqlw.table.TablePreset;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArraySet;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import link.locutus.Trocutus;
 import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
@@ -46,6 +48,7 @@ import link.locutus.core.settings.Settings;
 import link.locutus.util.EncryptionUtil;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
+import link.locutus.util.TimeUtil;
 import link.locutus.util.scheduler.ThrowingBiConsumer;
 import link.locutus.util.scheduler.ThrowingConsumer;
 import net.dv8tion.jda.api.entities.User;
@@ -494,6 +497,15 @@ public class TrouncedDB extends DBMain {
         executeStmt("CREATE INDEX IF NOT EXISTS index_kicks_alliance_date ON KICKS (alliance,date);");
 
         // ---------------------------
+
+        String activity = "CREATE TABLE IF NOT EXISTS `activity` (`nation` INT NOT NULL, `turn` BIGINT NOT NULL, PRIMARY KEY(nation, turn))";
+        try (Statement stmt = getConnection().createStatement()) {
+            stmt.addBatch(activity);
+            stmt.executeBatch();
+            stmt.clearBatch();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public void logout(long userId) {
@@ -712,7 +724,11 @@ public class TrouncedDB extends DBMain {
         }
     };
 
-    public int[] saveSpyOps(Set<DBSpy> toSave) {
+    public int[] saveSpyOps(Collection<DBSpy> toSave) {
+        return saveSpyOps(toSave, true);
+    }
+
+    public int[] saveSpyOps(Collection<DBSpy> toSave, boolean runEvents) {
         if (toSave.isEmpty()) return new int[0];
         Set<Event> events = new HashSet<>();
         List<DBSpy> toSaveFinal = new ArrayList<>();
@@ -747,7 +763,7 @@ public class TrouncedDB extends DBMain {
         for (int i = 0; i < result.length; i++) {
             DBSpy spy = toSaveFinal.get(i);
             boolean modified = result[i] > 0;
-            if (modified) {
+            if (modified && runEvents) {
                 events.add(new SpyCreateEvent(spy));
             }
 
@@ -1536,7 +1552,26 @@ public class TrouncedDB extends DBMain {
     }
 
     public List<AttackOrSpell> getAttackOrSpells(Collection<KingdomOrAlliance> attackers, Collection<KingdomOrAlliance> defenders, long start, long end) {
+        Set<Integer> col1KingdomIds = attackers.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col1AllianceIds = attackers.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col2KingdomIds = defenders.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col2AllianceIds = defenders.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
 
+        Predicate<AttackOrSpell> isCol1Att = f -> col1KingdomIds.contains(f.getAttacker_id()) || col1AllianceIds.contains(f.getAttacker_aa());
+        Predicate<AttackOrSpell> isCol2Att = f -> col2KingdomIds.contains(f.getAttacker_id()) || col2AllianceIds.contains(f.getAttacker_aa());
+        Predicate<AttackOrSpell> isCol1Def = f -> col1KingdomIds.contains(f.getDefender_id()) || col1AllianceIds.contains(f.getDefender_aa());
+        Predicate<AttackOrSpell> isCol2Def = f -> col2KingdomIds.contains(f.getDefender_id()) || col2AllianceIds.contains(f.getDefender_aa());
+
+        List<AttackOrSpell> result = new ArrayList<>();
+        for (DBAttack attack : allAttacks.values()) {
+            if (attack.date < start || attack.date > end) continue;
+            if (isCol1Att.test(attack) && isCol2Def.test(attack)) {
+                result.add(attack);
+            } else if (isCol2Att.test(attack) && isCol1Def.test(attack)) {
+                result.add(attack);
+            }
+        }
+        return result;
     }
 
     public void loadAndPurgeMeta() {
@@ -1619,6 +1654,67 @@ public class TrouncedDB extends DBMain {
             public void acceptThrows(PreparedStatement stmt) throws Exception {
                 stmt.setInt(1, key.ordinal());
             }
+        });
+    }
+
+    public Set<Long> getActivity(int nationId) {
+        return getActivity(nationId, 0);
+    }
+
+    public Set<Long> getActivityByDay(int nationId, long minTurn) {
+        Set<Long> result = new LinkedHashSet<>();
+        for (long turn : getActivity(nationId, minTurn)) {
+            result.add(turn / 12);
+        }
+        return result;
+    }
+
+    public Map<Long, Set<Integer>> getActivityByDay(long minDate, Predicate<Integer> allowNation) {
+        long minTurn = TimeUtil.getTurn(minDate);
+        try (PreparedStatement stmt = prepareQuery("select nation, (`turn`/24) FROM ACTIVITY WHERE turn > ?")) {
+            stmt.setLong(1, minTurn);
+
+            Map<Long, Set<Integer>> result = new Long2ObjectOpenHashMap<>();
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int id = rs.getInt(1);
+                    if (!allowNation.test(id)) continue;
+                    long day = rs.getLong(2);
+                    result.computeIfAbsent(day, f -> new IntOpenHashSet()).add(id);
+                }
+            }
+            return result;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Set<Long> getActivity(int nationId, long minTurn) {
+        try (PreparedStatement stmt = prepareQuery("select * FROM ACTIVITY WHERE nation = ? AND turn > ? ORDER BY turn ASC")) {
+            stmt.setInt(1, nationId);
+            stmt.setLong(2, minTurn);
+
+            Set<Long> set = new LinkedHashSet<>();
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    long turn = rs.getLong("turn");
+                    set.add(turn);
+                }
+            }
+            return set;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setActivity(int nationId, long turn) {
+        update("INSERT OR REPLACE INTO `ACTIVITY` (`nation`, `turn`) VALUES(?, ?)", (ThrowingConsumer<PreparedStatement>) stmt -> {
+            stmt.setInt(1, nationId);
+            stmt.setLong(2, turn);
         });
     }
 }

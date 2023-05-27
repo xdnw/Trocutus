@@ -5,7 +5,7 @@ public enum GuildSettingCategory {
     FOREIGN_AFFAIRS,
     WAR_ALERTS,
     BEIGE_ALERTS,
-    ORBIS_ALERTS,
+    GAME_ALERTS,
     WAR_ROOM,
     BANK_ACCESS,
     BANK_INFO,
