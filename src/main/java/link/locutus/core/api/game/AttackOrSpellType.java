@@ -1,5 +1,7 @@
 package link.locutus.core.api.game;
 
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -10,6 +12,11 @@ public enum AttackOrSpellType {
             Map<MilitaryUnit, Long> result = new EnumMap<>(MilitaryUnit.class);
             result.put(MilitaryUnit.BATTLE_POINTS, 200L);
             return result;
+        }
+
+        @Override
+        public double getDefaultDamage(DBKingdom attacker, DBKingdom defender, int myStrength, int defStrength, boolean unitDamage, boolean landDamage, boolean net) {
+
         }
     },
     SPY {
@@ -27,4 +34,8 @@ public enum AttackOrSpellType {
     ;
 
     public abstract Map<MilitaryUnit, Long> getDefaultCost();
+
+    public double getDefaultDamage(DBKingdom attacker, DBKingdom defender, int myStrength, int defStrength, boolean unitDamage, boolean landDamage, boolean net) {
+        return 0;
+    }
 }

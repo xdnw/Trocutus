@@ -1669,7 +1669,7 @@ public class TrouncedDB extends DBMain {
         return result;
     }
 
-    public Map<Long, Set<Integer>> getActivityByDay(long minDate, Predicate<Integer> allowNation) {
+    public Map<Long, Set<Integer>> getActivityByDay(long minDate, Predicate<Integer> allowKingdom) {
         long minTurn = TimeUtil.getTurn(minDate);
         try (PreparedStatement stmt = prepareQuery("select nation, (`turn`/24) FROM ACTIVITY WHERE turn > ?")) {
             stmt.setLong(1, minTurn);
@@ -1679,7 +1679,7 @@ public class TrouncedDB extends DBMain {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     int id = rs.getInt(1);
-                    if (!allowNation.test(id)) continue;
+                    if (!allowKingdom.test(id)) continue;
                     long day = rs.getLong(2);
                     result.computeIfAbsent(day, f -> new IntOpenHashSet()).add(id);
                 }

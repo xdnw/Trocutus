@@ -609,16 +609,19 @@ public class DBKingdom implements KingdomOrAlliance {
         return Trocutus.imp().getDB().getRemovesByKingdom(getId());
     }
 
+    @Command
     public int getAttackStrength() {
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.attack;
     }
 
+    @Command
     public int getDefenseStrength() {
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.defense;
     }
 
+    @Command
     public int getAverageStrength() {
         return (getAttackStrength() + getDefenseStrength()) / 2;
     }
@@ -728,6 +731,7 @@ public class DBKingdom implements KingdomOrAlliance {
         return new Activity(getId(), turns);
     }
 
+    @Command
     public Map.Entry<Double, Boolean> getIntelOpValue(long time) {
         DBSpy spy = getLatestSpyReport();
         long lastLogin = getLast_active();
@@ -748,10 +752,12 @@ public class DBKingdom implements KingdomOrAlliance {
         return Map.entry(value, hasLoot);
     }
 
+    @Command
     public boolean isInSpyRange(DBKingdom enemy) {
         return enemy.getScore() >= getAttackMinRange() && enemy.getScore() <= getAttackMaxRange();
     }
 
+    @Command
     public String getAllianceUrl(String slug) {
         DBAlliance aa = getAlliance();
         return aa == null ? null : aa.getUrl(slug);
@@ -791,5 +797,30 @@ public class DBKingdom implements KingdomOrAlliance {
                 Trocutus.imp().getDB().deleteMeta(id, key);
             }
         }
+    }
+
+    @Command
+    public int getTurnsInactive() {
+        return (int) TimeUnit.MILLISECONDS.toHours(System.currentTimeMillis() - getLast_active());
+    }
+
+    @Command
+    public boolean isOnline() {
+        if (getActive_m() < 60) return true;
+        User user = getUser();
+        if (user != null) {
+            for (Guild guild : user.getMutualGuilds()) {
+                Member member = guild.getMember(user);
+                if (member != null) {
+
+                    switch (member.getOnlineStatus()) {
+                        case ONLINE:
+                        case DO_NOT_DISTURB:
+                            return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

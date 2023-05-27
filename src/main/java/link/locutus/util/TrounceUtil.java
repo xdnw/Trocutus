@@ -6,10 +6,13 @@ import link.locutus.core.db.entities.kingdom.DBKingdom;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 public class TrounceUtil {
     public static String getAlert(Document dom) {
@@ -131,5 +134,82 @@ public class TrounceUtil {
             dpa = 40;
         }
         return Math.max(3, dpa);
+    }
+
+    public static BiFunction<Double, Double, Integer> getIsKingdomsInSpyRange(Collection<DBKingdom> attackers) {
+        int minScore = Integer.MAX_VALUE;
+        int maxScore = 0;
+        for (DBKingdom attacker : attackers) {
+            minScore = (int) Math.min(minScore, getMinScoreRange(attacker.getScore(), true));
+            maxScore = (int) Math.max(maxScore, getMaxScoreRange(attacker.getScore(), true));
+        }
+        int[] scoreRange = new int[maxScore + 1];
+        for (DBKingdom attacker : attackers) {
+            scoreRange[(int) attacker.getScore()]++;
+        }
+        int total = 0;
+        for (int i = 0; i < scoreRange.length; i++) {
+            total += scoreRange[i];
+            scoreRange[i] = total;
+        }
+        return new BiFunction<Double, Double, Integer>() {
+            @Override
+            public Integer apply(Double min, Double max) {
+                int minVal = min == 0 ? 0 : scoreRange[Math.min(scoreRange.length - 1, min.intValue() - 1)];
+                int maxVal = scoreRange[Math.min(scoreRange.length - 1, max.intValue())];
+                return maxVal - minVal;
+            }
+        };
+    }
+
+    public static BiFunction<Double, Double, Integer> getIsKingdomsInScoreRange(Collection<DBKingdom> attackers) {
+        int minScore = Integer.MAX_VALUE;
+        int maxScore = 0;
+        for (DBKingdom attacker : attackers) {
+            minScore = (int) Math.min(minScore, getMinScoreRange(attacker.getScore(), false));
+            maxScore = (int) Math.max(maxScore, getMaxScoreRange(attacker.getScore(), false));
+        }
+        int[] scoreRange = new int[maxScore + 1];
+        for (DBKingdom attacker : attackers) {
+            scoreRange[(int) attacker.getScore()]++;
+        }
+        int total = 0;
+        for (int i = 0; i < scoreRange.length; i++) {
+            total += scoreRange[i];
+            scoreRange[i] = total;
+        }
+        return new BiFunction<Double, Double, Integer>() {
+            @Override
+            public Integer apply(Double min, Double max) {
+                max = Math.min(scoreRange.length - 1, max);
+                min = Math.min(scoreRange.length - 1, min);
+                return scoreRange[(int) Math.ceil(max)] - scoreRange[min.intValue()];
+            }
+        };
+    }
+
+    public static BiFunction<Double, Double, Double> getXInRange(Collection<DBKingdom> attackers, Function<DBKingdom, Double> valueFunc) {
+        int minScore = Integer.MAX_VALUE;
+        int maxScore = 0;
+        for (DBKingdom attacker : attackers) {
+            minScore = (int) Math.min(minScore, getMinScoreRange(attacker.getScore(), false));
+            maxScore = (int) Math.max(maxScore, getMaxScoreRange(attacker.getScore(), false));
+        }
+        double[] scoreRange = new double[maxScore + 1];
+        for (DBKingdom attacker : attackers) {
+            scoreRange[(int) attacker.getScore()] += valueFunc.apply(attacker);
+        }
+        int total = 0;
+        for (int i = 0; i < scoreRange.length; i++) {
+            total += scoreRange[i];
+            scoreRange[i] = total;
+        }
+        return new BiFunction<Double, Double, Double>() {
+            @Override
+            public Double apply(Double min, Double max) {
+                max = Math.min(scoreRange.length - 1, max);
+                return scoreRange[(int) Math.ceil(max)] - scoreRange[min.intValue()];
+            }
+        };
     }
 }

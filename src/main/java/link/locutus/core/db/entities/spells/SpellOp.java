@@ -7,11 +7,13 @@ public class SpellOp {
     private final AttackOrSpellType type;
     private final DBKingdom attacker;
     private final DBKingdom target;
+    private final double damage;
 
-    public SpellOp(AttackOrSpellType type, DBKingdom attacker, DBKingdom target) {
+    public SpellOp(AttackOrSpellType type, DBKingdom attacker, DBKingdom target, double damage) {
         this.type = type;
         this.attacker = attacker;
         this.target = target;
+        this.damage = damage;
     }
 
     public AttackOrSpellType getType() {
@@ -24,5 +26,9 @@ public class SpellOp {
 
     public DBKingdom getTarget() {
         return target;
+    }
+
+    public double getDamage() {
+        return damage;
     }
 }

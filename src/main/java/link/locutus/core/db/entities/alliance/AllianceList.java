@@ -2,6 +2,7 @@ package link.locutus.core.db.entities.alliance;
 
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -55,4 +56,13 @@ public class AllianceList {
         }
         return new AllianceList(results);
     }
+
+    public Set<DBKingdom> getKingdoms(boolean removeVM, int removeInactiveM, boolean removeApps) {
+        Set<DBKingdom> nations = getKingdoms();
+        if (removeVM) nations.removeIf(f -> f.isVacation());
+        if (removeInactiveM > 0) nations.removeIf(f -> f.getActive_m() > removeInactiveM);
+        if (removeApps) nations.removeIf(f -> f.getPosition().ordinal() <= 1);
+        return nations;
+    }
+
 }
