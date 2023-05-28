@@ -46,7 +46,9 @@ public class WarParser {
     }
 
     public WarParser allowedWarTypes(Set<AttackOrSpellType> allowedWarTypes) {
-        attackOrSpells.removeIf(f -> !allowedWarTypes.contains(f.getType()));
+        if (allowedWarTypes != null) {
+            attackOrSpells.removeIf(f -> !allowedWarTypes.contains(f.getType()));
+        }
         return this;
     }
 
@@ -66,7 +68,7 @@ public class WarParser {
         if (isCol1Flag) {
             return (int) attackOrSpells.stream().filter(isCol1).count();
         } else {
-            return (int) attackOrSpells.stream().filter(isCol2).count();
+            return (int) attackOrSpells.stream().filter(f -> isCol2.test(f) && !isCol1.test(f)).count();
         }
     }
 
@@ -100,7 +102,7 @@ public class WarParser {
             if (isCol1Flag) {
                 isAttacker = isCol1.test(attackOrSpell);
             } else {
-                isAttacker = isCol2.test(attackOrSpell);
+                isAttacker = isCol2.test(attackOrSpell) && !isCol1.test(attackOrSpell);
             }
             total = ArrayUtil.add(total, attackOrSpell.getCost(isAttacker));
         }

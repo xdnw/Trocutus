@@ -142,7 +142,7 @@ public final class DBAttack implements AttackOrSpell {
             if (defender_archers != 0) result.put(MilitaryUnit.ARCHER, (long) defender_archers);
             if (defender_elites != 0) result.put(MilitaryUnit.ELITE, (long) defender_elites);
             if (goldLoot != 0) result.put(MilitaryUnit.GOLD, (long) goldLoot);
-            if (defenderAcreLoss != 0) result.put(MilitaryUnit.LAND, (long) -defenderAcreLoss);
+            if (defenderAcreLoss != 0) result.put(MilitaryUnit.LAND, (long) defenderAcreLoss);
             if (defHeroExp != 0) result.put(MilitaryUnit.EXP, (long) -defHeroExp);
         }
         return result;

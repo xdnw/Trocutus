@@ -156,7 +156,7 @@ public class CommandManager extends ListenerAdapter {
 
         this.commands.registerMethod(admin_commands, List.of("kingdom", "set"), "setUnits", "units");
 
-        this.commands.registerMethod(admin_commands, List.of("admin"), "deleteAllInaccessibleChannels", "deleteAllInaccessibleChannels");
+        this.commands.registerMethod(admin_commands, List.of("admin"), "deleteAllInaccessibleChannels", "unsetUnreachableChannels");
         this.commands.registerMethod(announce_commands, List.of("announce"), "announce", "create");
         this.commands.registerMethod(announce_commands, List.of("announce"), "archiveAnnouncement", "archive");
 

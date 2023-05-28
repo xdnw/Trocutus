@@ -10,7 +10,7 @@ public enum MilitaryUnit {
     DEVELOPED_LAND(false, 500 + 500, 0, 0, 0, -30),
     MANA(false, 0, 1, 0, 0, 0),
     EXP(false, 0, 0, -1, 0, 0),
-    BATTLE_POINTS(false, 0, 0, 0, 200, 0)
+    BATTLE_POINTS(false, 0, 0, 0, 1, 0)
 
 
     ;
