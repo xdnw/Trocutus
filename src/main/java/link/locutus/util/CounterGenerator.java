@@ -18,29 +18,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class CounterGenerator {
-    public static List<DBKingdom> generateCounters(GuildDB db, DBKingdom enemy, boolean requireOnDiscord) {
-        Set<DBKingdom> nations = new HashSet<>();
-        Guild guild = db.getGuild();
-        Role role = Roles.MEMBER.toRole(guild);
-
-        Set<Integer> allies = db.getAllies();
-        AllianceList alliance = db.getAllianceList();
-
-        if (requireOnDiscord || alliance == null || alliance.isEmpty() || allies.isEmpty()) {
-            if (role == null) throw new IllegalArgumentException("No member role setup");
-            List<Member> members = guild.getMembersWithRoles(role);
-            for (Member member : members) {
-                DBKingdom nation = DiscordUtil.getKingdom(member.getUser());
-                if (nation != null && (allies == null || allies.contains(nation))) {
-                    nations.add(nation);
-                }
-            }
-        } else {
-            nations.addAll(alliance.getKingdoms(true, 4880, true));
-        }
-
-        return generateCounters(db, enemy, new ArrayList<>(nations));
-    }
 
     public static List<DBKingdom> generateCounters(GuildDB db, DBKingdom enemy, List<DBKingdom> attackersSorted) {
         return generateCounters(db, enemy, attackersSorted, true, true);

@@ -75,7 +75,11 @@ public class DBKingdom implements KingdomOrAlliance {
             DBKingdom aa = Trocutus.imp().getDB().getKingdom(Integer.parseInt(input));
             if (aa != null) return aa;
         }
-        // TODO parse url
+        if (input.contains("/search/")) {
+            String[] split = input.split("/");
+            // last arg
+            input = split[split.length - 1];
+        }
 
         if (input.contains("/")) {
             String[] split = input.split("/", 2);
@@ -84,7 +88,8 @@ public class DBKingdom implements KingdomOrAlliance {
             Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.realm_id == realm.getId() && f.getName().equalsIgnoreCase(split[1]));
             if (matching.size() >= 1) return matching.iterator().next();
         }
-        Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.getName().equalsIgnoreCase(input));
+        String finalInput = input;
+        Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.getName().equalsIgnoreCase(finalInput));
         return matching.isEmpty() ? null : matching.iterator().next();
 
     }
@@ -823,4 +828,10 @@ public class DBKingdom implements KingdomOrAlliance {
         }
         return false;
     }
+
+    @Command
+    public int getPositionId() {
+        return getPosition().ordinal();
+    }
+
 }

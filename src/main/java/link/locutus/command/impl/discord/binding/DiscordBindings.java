@@ -286,6 +286,7 @@ public class DiscordBindings extends BindingHelper {
         throw new IllegalArgumentException("No channel binding found.");
     }
 
+    @Binding
     public CommandCallable command(String input) {
         CommandCallable callable = Trocutus.imp().getCommandManager().getCommands().get(input);
         if (callable == null) {

@@ -87,19 +87,201 @@ public class CommandManager extends ListenerAdapter {
     }
 
     public CommandManager registerCommands() {
+        List<Object> classes = new ArrayList<>();
+        classes.add(new AdminCommands());
+        classes.add(new AnnounceCommands());
+        classes.add(new BasicCommands());
+        classes.add(new CredentialCommands());
+        classes.add(new DiscordCommands());
+        classes.add(new EmbedCommands());
+        classes.add(new FACommands());
+        classes.add(new FunCommands());
+        classes.add(new HelpCommands());
+        classes.add(new IACommands());
+        classes.add(new InterviewCommands());
+        classes.add(new KingdomCommands());
+        classes.add(new PlayerSettingCommands());
+        classes.add(new SettingCommands());
+        classes.add(new SheetCommands());
+        classes.add(new StatCommands());
+        classes.add(new TrounceUtilCommands());
+
+        for (Object obj : classes) {
+            String name = obj.getClass().getSimpleName();
+            name = name.replaceAll("(.)(\\p{Upper})", "$1_$2").toLowerCase(Locale.ROOT);
+
+            for (Method method : obj.getClass().getDeclaredMethods()) {
+                if (method.getAnnotation(Command.class) == null) continue;
+                String methodName = method.getName();
+                String line = "this.commands.registerMethod(" + name + ", List.of(\"" + name + "\"), \"" + methodName + "\", \"" + methodName + "\");";
+                System.out.println(line);
+            }
+        }
+
+        AdminCommands admin_commands = new AdminCommands();
+        AnnounceCommands announce_commands = new AnnounceCommands();
+        BasicCommands basic_commands = new BasicCommands();
+        CredentialCommands credential_commands = new CredentialCommands();
+        DiscordCommands discord_commands = new DiscordCommands();
+        FACommands f_acommands = new FACommands();
+        // fun_commands
+        FunCommands fun_commands = new FunCommands();
+        // i_acommands
+        IACommands i_acommands = new IACommands();
+        // interview_commands
+        InterviewCommands interview_commands = new InterviewCommands();
+        // kingdom_commands
+        KingdomCommands kingdom_commands = new KingdomCommands();
+        // player_setting_commands
+        PlayerSettingCommands player_setting_commands = new PlayerSettingCommands();
+        // setting_commands
+        SettingCommands setting_commands = new SettingCommands();
+        // sheet_commands
+        SheetCommands sheet_commands = new SheetCommands();
+        // stat_commands
+        StatCommands stat_commands = new StatCommands();
+        // trounce_util_commands
+        TrounceUtilCommands trounce_util_commands = new TrounceUtilCommands();
+        HelpCommands help_commands = new HelpCommands();
+
+        this.commands.registerMethod(admin_commands, List.of("admin"), "stop", "stop");
+        this.commands.registerMethod(admin_commands, List.of("user"), "dm", "dm");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "sync", "kingdom");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAllianceKingdoms", "alliance_kingdoms");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncInteractions", "interactions");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAlliances", "alliances");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAllKingdoms", "kingdoms");
+        this.commands.registerMethod(admin_commands, List.of("admin"), "listGuildOwners", "listGuildOwners");
+        this.commands.registerMethod(admin_commands, List.of("admin"), "leaveServer", "leaveServer");
+
+        this.commands.registerMethod(admin_commands, List.of("kingdom", "set"), "setUnits", "units");
+
+        this.commands.registerMethod(admin_commands, List.of("admin"), "deleteAllInaccessibleChannels", "deleteAllInaccessibleChannels");
+        this.commands.registerMethod(announce_commands, List.of("announce"), "announce", "create");
+        this.commands.registerMethod(announce_commands, List.of("announce"), "archiveAnnouncement", "archive");
+
+        this.commands.registerMethod(basic_commands, List.of(), "register", "register");
+        this.commands.registerMethod(basic_commands, List.of(), "me", "me");
+        this.commands.registerMethod(basic_commands, List.of(), "who", "who");
+
+        this.commands.registerMethod(basic_commands, List.of("kingdom"), "register",  "register");
+        this.commands.registerMethod(basic_commands, List.of("kingdom"), "me",  "me");
+        this.commands.registerMethod(basic_commands, List.of("kingdom"), "who",  "info");
+
+        this.commands.registerMethod(basic_commands, List.of("alliance"), "alliance", "info");
+
+        this.commands.registerMethod(basic_commands, List.of(), "raid", "raid");
+        this.commands.registerMethod(basic_commands, List.of("war", "find"), "raid", "raid");
+        this.commands.registerMethod(basic_commands, List.of(), "spyop", "spyop");
+        this.commands.registerMethod(basic_commands, List.of("war", "find"), "spyop", "intel");
+
+        this.commands.registerMethod(basic_commands, List.of("mail"), "mail", "send");
+        this.commands.registerMethod(credential_commands, List.of("credentials"), "addApiKey", "addApiKey");
+        this.commands.registerMethod(credential_commands, List.of("credentials"), "login", "login");
+        this.commands.registerMethod(credential_commands, List.of("credentials"), "logout", "logout");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "close", "close");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "open", "open");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "channel", "create");
+        this.commands.registerMethod(discord_commands, List.of("credentials"), "unregister", "unregister");
+        this.commands.registerMethod(discord_commands, List.of("role"), "mask", "mask");
+        this.commands.registerMethod(discord_commands, List.of("role"), "addRole", "add");
+        this.commands.registerMethod(discord_commands, List.of("role", "alias"), "aliasRole", "set");
+        this.commands.registerMethod(discord_commands, List.of("role", "assignable"), "removeAssignableRole", "unregister");
+        this.commands.registerMethod(discord_commands, List.of("role", "assignable"), "listAssignableRoles", "list");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "closeInactiveChannels", "closeInactive");
+        this.commands.registerMethod(discord_commands, List.of("role"), "addRoleToAllMembers", "addToAllMembers");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "debugPurgeChannels", "purge");
+        this.commands.registerMethod(discord_commands, List.of("role", "alias"), "unregisterRole", "remove");
+        this.commands.registerMethod(discord_commands, List.of("role", "assignable"), "removeRole", "remove");
+        this.commands.registerMethod(discord_commands, List.of("admin"), "listExpiredGuilds", "listExpiredGuilds");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "channelPermissions", "permissions");
+        this.commands.registerMethod(discord_commands, List.of("embed"), "card", "create");
+        this.commands.registerMethod(discord_commands, List.of(), "say", "say");
+        this.commands.registerMethod(discord_commands, List.of(), "copyPasta", "copyPasta");
+        this.commands.registerMethod(discord_commands, List.of("admin"), "importEmojis", "importEmojis");
+        this.commands.registerMethod(discord_commands, List.of("embed"), "updateEmbed", "update");
+        this.commands.registerMethod(discord_commands, List.of("embed"), "msgInfo", "reactions");
+        this.commands.registerMethod(discord_commands, List.of("role"), "hasRole", "has");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "channelUp", "up");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "channelDown", "channelDown");
+        this.commands.registerMethod(discord_commands, List.of("embed"), "embedInfo", "info");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "deleteChannel", "delete");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "channelCategory", "category");
+        this.commands.registerMethod(discord_commands, List.of("role", "assignable"), "addAssignableRole", "create");
+        this.commands.registerMethod(discord_commands, List.of("mail"), "mailCommandOutput", "command");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "memberChannels", "can_access");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "channelMembers", "members");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "allChannelMembers", "all");
+        this.commands.registerMethod(discord_commands, List.of("mail"), "mailSheet", "sheet");
+        this.commands.registerMethod(discord_commands, List.of("role", "auto"), "autorole", "user");
+        this.commands.registerMethod(discord_commands, List.of("role", "auto"), "autoroleall", "all");
+        this.commands.registerMethod(discord_commands, List.of("role", "auto"), "clearAllianceRoles", "clearAllianceRoles");
+        this.commands.registerMethod(discord_commands, List.of("channel"), "channelCount", "count");
+        this.commands.registerMethod(discord_commands, List.of("role", "auto"), "clearNicks", "clearNicks");
+        this.commands.registerMethod(f_acommands, List.of("coalition"), "removeCoalition", "remove");
+        this.commands.registerMethod(f_acommands, List.of("coalition"), "addCoalition", "add");
+        this.commands.registerMethod(f_acommands, List.of("alliance"), "treaties", "treaties");
+        this.commands.registerMethod(f_acommands, List.of("coalition"), "createCoalition", "create");
+        this.commands.registerMethod(f_acommands, List.of("coalition"), "listCoalition", "list");
+        this.commands.registerMethod(f_acommands, List.of(), "embassy", "embassy");
+        this.commands.registerMethod(f_acommands, List.of("coalition"), "deleteCoalition", "delete");
+        this.commands.registerMethod(fun_commands, List.of(), "trorg", "trorg");
+        this.commands.registerMethod(fun_commands, List.of(), "joke", "joke");
+        this.commands.registerMethod(help_commands, List.of("help"), "command", "command");
+        this.commands.registerMethod(i_acommands, List.of("audit"), "checkCities", "run");
+        this.commands.registerMethod(interview_commands, List.of("interview"), "interview", "create");
+        this.commands.registerMethod(interview_commands, List.of("interview"), "iaCat", "set_category");
+        this.commands.registerMethod(interview_commands, List.of("interview", "mentor"), "listMentors", "list");
+        this.commands.registerMethod(interview_commands, List.of("interview", "mentor"), "mentor", "set");
+        this.commands.registerMethod(interview_commands, List.of("interview"), "interviewMessage", "send_message");
+        this.commands.registerMethod(interview_commands, List.of("interview", "mentee"), "unassignMentee", "unassign");
+        this.commands.registerMethod(interview_commands, List.of("interview", "mentee"), "mentee", "set");
+        this.commands.registerMethod(interview_commands, List.of("interview", "mentee"), "myMentees", "list_mine");
+        this.commands.registerMethod(interview_commands, List.of("interview"), "sortInterviews", "sort");
+        this.commands.registerMethod(interview_commands, List.of("interview"), "syncInterviews", "sync");
+        this.commands.registerMethod(interview_commands, List.of("interview"), "iachannels", "list");
+        this.commands.registerMethod(kingdom_commands, List.of("kingdom"), "dnr", "can_i_raid");
+        this.commands.registerMethod(kingdom_commands, List.of("kingdom"), "leftAA", "departures");
+        this.commands.registerMethod(kingdom_commands, List.of("alliance"), "leftAA", "departures");
+        this.commands.registerMethod(player_setting_commands, List.of("alert"), "loginNotifier", "login");
+        this.commands.registerMethod(player_setting_commands, List.of("announcement"), "readAnnouncement", "read");
+        this.commands.registerMethod(setting_commands, List.of("setting"), "info", "info");
+        this.commands.registerMethod(setting_commands, List.of("setting"), "delete", "delete");
+        this.commands.registerMethod(setting_commands, List.of("setting"), "sheets", "sheets");
+        this.commands.registerMethod(sheet_commands, List.of("sheet"), "counter", "counter");
+        this.commands.registerMethod(sheet_commands, List.of("sheet", "blitz"), "validateSpyBlitzSheet", "validate");
+        this.commands.registerMethod(sheet_commands, List.of("sheet"), "allianceKingdomsSheet", "allianceKingdoms");
+        this.commands.registerMethod(sheet_commands, List.of("kingdom", "bp_mana"), "setBpMana", "set");
+        this.commands.registerMethod(sheet_commands, List.of("sheet"), "IntelOpSheet", "intel");
+        this.commands.registerMethod(sheet_commands, List.of("sheet"), "KingdomSheet", "kingdoms");
+        this.commands.registerMethod(sheet_commands, List.of("sheet"), "ActivitySheet", "activity");
+        this.commands.registerMethod(sheet_commands, List.of("kingdom", "bp_mana"), "listBpMana", "list");
+        this.commands.registerMethod(sheet_commands, List.of("sheet"), "mailTargets", "mail_targets");
+        this.commands.registerMethod(stat_commands, List.of("stat", "kingdom"), "attributeScoreGraph", "attribute_score");
+        this.commands.registerMethod(stat_commands, List.of("stat", "alliance"), "allianceRankingTime", "ranking_time");
+        this.commands.registerMethod(stat_commands, List.of("stat", "alliance"), "allianceMetricsByTurn", "metrics_time");
+        this.commands.registerMethod(stat_commands, List.of("stat", "alliance"), "allianceMetricsCompareByTurn", "metrics_compare_time");
+        this.commands.registerMethod(stat_commands, List.of("stat", "kingdom"), "strengthTierGraph", "score_tier");
+        this.commands.registerMethod(stat_commands, List.of("stat", "kingdom"), "nationRanking", "ranking");
+        this.commands.registerMethod(stat_commands, List.of("stat", "war"), "warAttacksByDay", "attacks_time");
+        this.commands.registerMethod(stat_commands, List.of("stat", "war"), "warsCost", "cost");
+        this.commands.registerMethod(stat_commands, List.of("stat", "alliance"), "allianceRanking", "ranking");
+        this.commands.registerMethod(stat_commands, List.of("stat", "kingdom"), "scoreTierGraph", "score_tier");
+        this.commands.registerMethod(stat_commands, List.of("stat", "alliance"), "allianceMetricsAB", "compare_metrics");
+        this.commands.registerMethod(stat_commands, List.of("stat", "war"), "warRanking", "ranking");
+        this.commands.registerMethod(trounce_util_commands, List.of(), "score", "score");
+        this.commands.registerMethod(trounce_util_commands, List.of("land"), "landLoot", "loot");
+        this.commands.registerMethod(trounce_util_commands, List.of("unit"), "unitCost", "cost");
+
+        this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_optimal", "optimal");
+        this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_land", "land");
+
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "sync", "kingdom");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncInteractions", "interactions");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAlliances", "alliances");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAllianceKingdoms", "kingdoms_in_aa");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAllKingdoms", "kingdoms");
 
-        this.commands.registerMethod(new BasicCommands(), List.of(), "raid", "raid");
-        this.commands.registerMethod(new BasicCommands(), List.of(), "spyop", "spyop");
-        this.commands.registerMethod(new BasicCommands(), List.of(), "alliance", "alliance");
-        this.commands.registerMethod(new BasicCommands(), List.of(), "who", "who");
-        this.commands.registerMethod(new BasicCommands(), List.of(), "me", "me");
-        this.commands.registerMethod(new BasicCommands(), List.of(), "register", "register");
-        this.commands.registerMethod(new BasicCommands(), List.of("mail"), "mail", "send");
         registerSettings();
         return this;
     }

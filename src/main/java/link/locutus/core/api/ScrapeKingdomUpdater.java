@@ -307,7 +307,7 @@ public class ScrapeKingdomUpdater {
 
     public void updateKingdom(int realm_id, String name) throws IOException {
         System.out.println("Updating kingdom " + name);
-        String slug = name.toLowerCase(Locale.ROOT).replaceAll(" ", "-").replaceAll("[^a-z0-9_-]", "");
+        String slug = name.toLowerCase(Locale.ROOT).trim().replaceAll(" ", "-").replaceAll("[^a-z0-9_-]", "");
         // remove non alphanumeric underscore
         String url = "https://trounced.net/kingdom/" + auth.getKingdom(realm_id).getSlug() + "/search/" + slug;
         JSONObject json = getJson(url);

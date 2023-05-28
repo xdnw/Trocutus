@@ -31,6 +31,7 @@ import link.locutus.core.db.entities.kingdom.KingdomAttribute;
 import link.locutus.core.db.entities.kingdom.KingdomList;
 import link.locutus.core.db.entities.kingdom.KingdomPlaceholders;
 import link.locutus.core.db.entities.kingdom.SimpleKingdomList;
+import link.locutus.core.db.entities.spells.BPManaEntry;
 import link.locutus.core.db.entities.spells.SpellOp;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
@@ -38,7 +39,6 @@ import link.locutus.core.db.guild.SheetKeys;
 import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.util.ArrayUtil;
-import link.locutus.util.BlitzGenerator;
 import link.locutus.util.CounterGenerator;
 import link.locutus.util.MarkupUtil;
 import link.locutus.util.MathMan;
@@ -67,6 +67,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -76,6 +77,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -322,7 +324,7 @@ public class SheetCommands {
                     List<SpellOp> currentOps = targets.computeIfAbsent(enemy, f -> new ArrayList<>());
                     if (currentOps.size() > 1) continue;
                     if (currentOps.size() == 1 && currentOps.get(0).getAttacker() == attacker) continue;
-                    SpellOp op = new SpellOp(AttackOrSpellType.SPY, attacker, enemy);
+                    SpellOp op = new SpellOp(AttackOrSpellType.SPY, attacker, enemy, 0);
                     currentOps.add(op);
                     iter.remove();
                     continue outer;
@@ -332,7 +334,7 @@ public class SheetCommands {
         }
 
         sheet.clearAll();
-        SpySheet.generateSpySheet(sheet, targets);
+        SpyBlitzGenerator.generateSpySheet(sheet, targets);
         sheet.set(0, 0);
 
         sheet.attach(io.create()).send();
@@ -403,13 +405,54 @@ public class SheetCommands {
         return null;
     }
 
+    @Command
+    public String setBpMana(@Me Map<DBRealm, DBKingdom> me, DBRealm realm, int bp, int mana) {
+        DBKingdom myKingdom = me.get(realm);
+        if (myKingdom == null) {
+            // register
+            throw new IllegalArgumentException("You are not registered in " + realm.getName());
+        }
+        BPManaEntry.setBpMana(myKingdom.getId(), bp, mana);
+        return "Set BATTLE POINTS to " + bp + " and MANA to " + mana + " (not: this will expire this turn)";
+    }
+
+    @Command
+    @RolePermission(Roles.MILCOM)
+    public String listBpMana(@Me GuildDB db, Set<DBKingdom> kingdoms) {
+        StringBuilder response = new StringBuilder();
+        Set<Integer> aaIds = db.getAllianceIds();
+
+        int size = kingdoms.size();
+        kingdoms.removeIf(k -> !aaIds.contains(k.getAlliance_id()));
+        if (kingdoms.size() < size) {
+            response.append("Only showing kingdoms in an alliance (" + (size - kingdoms.size()) + " removed)\n");
+        }
+
+        for (DBKingdom kingdom : kingdoms) {
+            BPManaEntry entry = BPManaEntry.getEntry(kingdom.getId());
+            if (entry == null) {
+                response.append(kingdom.getName()).append(" has no entry!\n");
+            } else {
+                response.append(kingdom.getName()).append(" has ").append(entry.bp).append(" BP and ").append(entry.mana).append(" mana\n");
+            }
+        }
+
+        return response.toString();
+    }
+
     @RolePermission(Roles.MILCOM)
     @Command(desc = "Run checks on a spy blitz sheet.\n" +
             "Checks that all nations are in range of their spy blitz targets and that they have no more than the provided number of offensive operations.\n" +
             "Add `true` for the day-change argument to double the offensive op limit")
     public String validateSpyBlitzSheet(@Me GuildDB db, @Default SpreadSheet sheet,
-                                        @Arg("If the sheet is for attacks at day change")
-                                        @Default("false") boolean dayChange,
+
+                                        @Switch("u") boolean allowUpdeclares,
+                                        @Switch("w") boolean allowWarAlerted,
+                                        @Switch("s") boolean allowSpellAlerted,
+                                        @Switch("a") @Default("1") int maxAttacks,
+                                        @Switch("c") @Default("1") int maxSpellCasts,
+
+
                                         @Arg("Only allow attacking these nations")
                                         @Default("*") Set<DBKingdom> filter) throws GeneralSecurityException, IOException {
         if (sheet == null) {
@@ -420,12 +463,44 @@ public class SheetCommands {
 
         Function<DBKingdom, Boolean> isValidTarget = n -> filter.contains(n);
 
-        BlitzGenerator.getTargets(sheet, 0, 0.5, 1.5, false, false, true, isValidTarget, new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
+        BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String> output = new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
             @Override
             public void accept(Map.Entry<DBKingdom, DBKingdom> dbKingdomDBKingdomEntry, String msg) {
                 response.append(msg + "\n");
             }
-        });
+        };
+
+        Function<DBKingdom, Map<MilitaryUnit, Long>> getBpMana = new Function<DBKingdom, Map<MilitaryUnit, Long>>() {
+            @Override
+            public Map<MilitaryUnit, Long> apply(DBKingdom kingdom) {
+                Map<MilitaryUnit, Long> result = new EnumMap<>(MilitaryUnit.class);
+                int bp = BPManaEntry.getBp(kingdom.getId());
+                int mana = BPManaEntry.getMana(kingdom.getId());
+                if (bp != 0) {
+                    result.put(MilitaryUnit.BATTLE_POINTS, (long) bp);
+                }
+                if (mana != 0) {
+                    result.put(MilitaryUnit.MANA, (long) mana);
+                }
+                return result;
+            }
+        };
+
+        Map<DBKingdom, Set<SpellOp>> targets = SpyBlitzGenerator.getTargets(sheet, 0, output);
+        SpyBlitzGenerator.validateTargets(
+                targets,
+                getBpMana,
+                0.5,
+                1.5,
+                !allowUpdeclares,
+                !allowWarAlerted,
+                !allowSpellAlerted,
+                maxAttacks,
+                maxSpellCasts,
+                isValidTarget,
+                output
+
+        );
 
         if (response.length() <= 1) return "All checks passed";
 
@@ -435,8 +510,6 @@ public class SheetCommands {
     @RolePermission(Roles.MILCOM)
     @Command(desc = "Send spy or war blitz sheets to individual nations")
     public String mailTargets(@Me GuildDB db, @Me Guild guild, @Me JSONObject command, @Me User author, @Me IMessageIO channel, @Me Map<DBRealm, DBKingdom> me,
-                              @Arg("Url of the war blitz sheet to send")
-                              @Default SpreadSheet blitzSheet,
                               @Arg("Url of the spy sheet to send")
                               @Default SpreadSheet spySheet,
                               @Arg("What nations to send to")
@@ -465,22 +538,24 @@ public class SheetCommands {
 
         if (dm && !Roles.MAIL.hasOnRoot(author)) return "You do not have permission to dm users";
 
-        if (blitzSheet != null) {
-            warDefAttMap = BlitzGenerator.getTargets(blitzSheet, 0, f -> 1, 0.5, 1.5, true, true, false, f -> true, (a, b) -> {});
-        }
+        StringBuilder errors = new StringBuilder();
+        BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String> invalidOut = new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
+            @Override
+            public void accept(Map.Entry<DBKingdom, DBKingdom> entry, String s) {
+                errors.append(s + "\n");
+            }
+        };
 
         if (spySheet != null) {
             try {
-                spyDefAttMap = BlitzGenerator.getTargets(spySheet, 0, f -> 1, 0.5, 1.5, false, false, true, f -> true, (a, b) -> {});
-                spyOps = SpyBlitzGenerator.getTargets(spySheet, 0);
+                spyOps = SpyBlitzGenerator.getTargets(spySheet, 0, invalidOut);
             } catch (NullPointerException e) {
-                spyDefAttMap = BlitzGenerator.getTargets(spySheet, 4, f -> 1, 0.5, 1.5, false, false, true, f -> true, (a, b) -> {});
-                spyOps = SpyBlitzGenerator.getTargets(spySheet, 4);
+                spyOps = SpyBlitzGenerator.getTargets(spySheet, 4, invalidOut);
             }
         }
 
-        Map<DBKingdom, Set<DBKingdom>> warAttDefMap = BlitzGenerator.reverse(warDefAttMap);
-        Map<DBKingdom, Set<DBKingdom>> spyAttDefMap = BlitzGenerator.reverse(spyDefAttMap);
+        Map<DBKingdom, Set<DBKingdom>> warAttDefMap = SpyBlitzGenerator.reverse(warDefAttMap);
+        Map<DBKingdom, Set<DBKingdom>> spyAttDefMap = SpyBlitzGenerator.reverse(spyDefAttMap);
         Set<DBKingdom> allAttackers = new LinkedHashSet<>();
         allAttackers.addAll(warAttDefMap.keySet());
         allAttackers.addAll(spyAttDefMap.keySet());
@@ -491,15 +566,9 @@ public class SheetCommands {
         String blurb = "BE ACTIVE ON DISCORD. Additional attack instructions may be in your war room\n" +
                 "\n" +
                 "This is an alliance war, not a counter. The goal is battlefield control:\n" +
-                "1. Try to raid wars just before day change (day change if possible)\n" +
-                "2. If you have ground control, further attacks with tanks kills aircraft\n" +
-                "3. If you have tanks and can get ground control, do ground attacks to kill planes\n" +
-                "4. Get air control to halve enemy tank strength\n" +
-                "5. You can rebuy units inbetween each attack\n" +
-                "6. Do not waste attacks destroying infra or minimal units\n" +
-                "7. Be efficient with your attacks and try NOT to get active enemies to 0 resistance\n" +
-                "8. You can buy more ships when enemy planes are weak, to avoid naval losses\n" +
-                "9. Some wars you may get beiged in, that is OKAY";
+                "1. Try to raid wars just before turn change\n" +
+                "2. Avoid attacking enemies stronger than you\n" +
+                "3. Avoid attacking enemies that are alerted (wait for it to tick down)";
 
         long start = System.currentTimeMillis();
 
@@ -681,184 +750,18 @@ public class SheetCommands {
             msg = msg.file("Errors.txt", errorMsg.toString());
         }
         msg.append("Done, sent " + sent + " messages").send();
+        if (!errors.isEmpty()) {
+            msg.append("\n\n**Errors:**\n>>> " + errors);
+        }
         return null;
-    }
-
-    @RolePermission(Roles.MILCOM)
-    @Command(desc="Run checks on a blitz sheet\n" +
-            "Check that all nations are in range of their blitz targets, are still in the alliance and have no more than the provided number of offensive wars")
-    public String ValidateBlitzSheet(SpreadSheet sheet,
-                                     @Arg("Max wars per attacker")
-                                     @Default("3") int maxWars,
-                                     @Arg("Only allow attacking these nations")
-                                     @Default("*") Set<DBKingdom> nationsFilter,
-                                     @Arg("Which row of the sheet has the header\n" +
-                                             "Default: 1st row")
-                                     @Switch("h") Integer headerRow) {
-        Function<DBKingdom, Boolean> isValidTarget = f -> nationsFilter.contains(f);
-
-        StringBuilder response = new StringBuilder();
-        Integer finalMaxWars = maxWars;
-        if (headerRow == null) headerRow = 0;
-        BlitzGenerator.getTargets(sheet, headerRow, f -> finalMaxWars, 0.5, 1.5, true, true, false, isValidTarget, new BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String>() {
-            @Override
-            public void accept(Map.Entry<DBKingdom, DBKingdom> dbKingdomDBKingdomEntry, String msg) {
-                response.append(msg + "\n");
-            }
-        });
-
-        if (response.length() <= 1) return "All checks passed";
-
-        return response.toString();
     }
 
     private String getStrengthInfo(DBKingdom nation) {
-        String msg = "Ground:" + (int) nation.getGroundStrength(true, false) + ", Air: " + nation.getAircraft() + ", cities:" + nation.getCities();
+        String msg = "Attack:" + (int) nation.getAttackStrength() + ", Defense: " + nation.getDefenseStrength() + ", Land:" + nation.getTotal_land();
 
         if (nation.getActive_m() > 10000) msg += " (inactive)";
-        else {
-            msg += " (" + ((int) (nation.avg_daily_login() * 100)) + "% active)";
-        }
 
         return msg;
-    }
-
-
-    @Command(desc = "Generates a a blitz sheet\n" +
-            "A blitz sheet contains a list of defenders (left column) and auto assigns attackers (right columns)\n" +
-            "Note: If the blitz sheet generated has a lot of city updeclares or unslotted enemies it is recommended to go through and remove low priority defenders\n" +
-            "- Low priority could be enemies without a recent offensive war, inactive, low military, or poor activity\n" +
-            "- Example defKingdoms: `~enemies,#position>1,#active_m<4880,#dayssincelastoffensive>200,#dayssince3consecutivelogins>120,#aircraftpct<0.8,#tankpct<=0.6`" +
-            "Note: To avoid updeclares enable `onlyEasyTargets`")
-    @RolePermission(Roles.MILCOM)
-    public String blitzSheet(@Me IMessageIO io, @Me User author, @Me GuildDB db,
-                             @Arg("Kingdoms that should be used for the attackers\n" +
-                                     "It is recommended to use a google sheet of the attackers available")
-                             KingdomList attKingdoms,
-
-                             @Arg("Kingdoms that should be used for the defenders\n" +
-                                     "It is recommended to use a google sheet of the priority defenders (unless you are sure you can hit every nation)")
-                             KingdomList defKingdoms,
-                             @Arg("How many offensive slots a nation can have (defaults to 3)")
-                             @Default("3") @Range(min=1,max=5) int maxOff,
-                             @Arg("Value between 0 and 1 to prioritize assigning a target to nations in the same alliance\n" +
-                                     "Default: 0")
-                             @Default("0") double sameAAPriority,
-                             @Arg("Value between 0 and 1 to prioritize assigning targets to nations with similar activity patterns\n" +
-                                     "Recommended not to use if you know who is attacking")
-                             @Default("0") double sameActivityPriority,
-                             @Arg("The turn in the day (between 0 and 11) when you expect the blitz to happen")
-                             @Default("-1") @Range(min=-1,max=11) int turn,
-                             @Arg("A value between 0 and 1 to filter out attackers below this level of daily activity (default: 0, which is 0%)\n" +
-                                     "Recommend using if you did not provide a sheet of attackers")
-                             @Default("0") double attActivity,
-                             @Arg("A value between 0 and 1 to filter out defenders below this level of activity (default: 0)\n" +
-                                     "Recommend using if you did not provide a sheet of defenders")
-                             @Default("0") double defActivity,
-                             @Arg("Factor in existing wars of attackers and defenders\n" +
-                                     "i.e. To determine slots available and nation strength")
-                             @Switch("w") @Default("true") boolean processActiveWars,
-                             @Arg("Only assign down declares")
-                             @Switch("e") boolean onlyEasyTargets,
-                             @Arg("Maximum ratio of defender cities to attacker\n" +
-                                     "e.g. A value of 1.5 means defenders can have 1.5x more cities than the attacker")
-                             @Switch("c") Double maxCityRatio,
-                             @Arg("Maximum ratio of defender ground strength to attacker\n" +
-                                     "e.g. A value of 1.5 means defenders can have 1.5x more ground strength than the attacker")
-                             @Switch("g") Double maxGroundRatio,
-                             @Arg("Maximum ratio of defender aircraft to attacker\n" +
-                                     "e.g. A value of 1.5 means defenders can have 1.5x more aircraft than the attacker")
-                             @Switch("a") Double maxAirRatio,
-                             @Switch("s") SpreadSheet sheet) throws GeneralSecurityException, IOException {
-        Set<Long> guilds = new HashSet<>();
-
-        BlitzGenerator blitz = new BlitzGenerator(turn, maxOff, sameAAPriority, sameActivityPriority, attActivity, defActivity, guilds, processActiveWars);
-        blitz.addKingdoms(attKingdoms.getKingdoms(), true);
-        blitz.addKingdoms(defKingdoms.getKingdoms(), false);
-        if (processActiveWars) blitz.removeSlotted();
-
-        Map<DBKingdom, List<DBKingdom>> targets;
-        if (maxCityRatio != null || maxGroundRatio != null || maxAirRatio != null) {
-            onlyEasyTargets = true;
-        }
-        if (onlyEasyTargets) {
-            if (maxCityRatio == null) maxCityRatio = 1.8;
-            if (maxGroundRatio ==  null) maxGroundRatio = 1d;
-            if (maxAirRatio == null) maxAirRatio = 1.22;
-            targets = blitz.assignEasyTargets(maxCityRatio, maxGroundRatio, maxAirRatio);
-        } else {
-            targets = blitz.assignTargets();
-        }
-
-        if (sheet == null) sheet = SpreadSheet.create(db, SheetKeys.ACTIVITY_SHEET);
-
-        List<RowData> rowData = new ArrayList<RowData>();
-
-        List<Object> header = new ArrayList<>(Arrays.asList(
-                "alliance",
-                "nation",
-                "land",
-                "attack_str",
-                "defend_str",
-                "average_str",
-                "resource_level",
-                "alert_level",
-                "spell_alert_level",
-                "inactive",
-                "login_chance",
-                "weekly_activity",
-                "att1",
-                "att2",
-                "att3"
-        ));
-
-        rowData.add(SheetUtil.toRowData(header));
-
-        for (Map.Entry<DBKingdom, List<DBKingdom>> entry : targets.entrySet()) {
-            DBKingdom defender = entry.getKey();
-            List<DBKingdom> attackers = entry.getValue();
-            ArrayList<Object> row = new ArrayList<>();
-            row.add(MarkupUtil.sheetUrl(defender.getAllianceName(), defender.getAllianceUrl(null)));
-            row.add(MarkupUtil.sheetUrl(defender.getName(), defender.getUrl(null)));
-
-            row.add(defender.getTotal_land());
-            row.add(defender.getAttackStrength());
-            row.add(defender.getDefenseStrength());
-            row.add(defender.getAverageStrength());
-            row.add(defender.getResource_level() + "");
-            row.add(defender.getAlert_level() + "");
-            row.add(defender.getSpell_alert() + "");
-            row.add(TimeUtil.secToTime(TimeUnit.MINUTES, defender.getActive_m()));
-
-            Activity activity = defender.getActivity(12 * 7 * 2);
-            double loginChance = activity.loginChance(turn == -1 ? 11 : turn, 48, false);
-            row.add(loginChance);
-            row.add(activity.getAverageByDay());
-
-            List<DBKingdom> myCounters = targets.getOrDefault(defender, Collections.emptyList());
-
-            for (int i = 0; i < myCounters.size(); i++) {
-                DBKingdom counter = myCounters.get(i);
-                String counterUrl = MarkupUtil.sheetUrl(counter.getName(), counter.getUrl(null));
-                row.add(counterUrl);
-            }
-            RowData myRow = SheetUtil.toRowData(row);
-            List<CellData> myRowData = myRow.getValues();
-            int attOffset = myRowData.size() - myCounters.size();
-            for (int i = 0; i < myCounters.size(); i++) {
-                DBKingdom counter = myCounters.get(i);
-                myRowData.get(attOffset + i).setNote(getAttackerNote(counter));
-            }
-            myRow.setValues(myRowData);
-
-            rowData.add(myRow);
-        }
-
-        sheet.clear("A:Z");
-        sheet.write(rowData);
-
-        sheet.send(io, null, author.getAsMention()).send();
-        return null;
     }
 
     private String getAttackerNote(DBKingdom nation) {
@@ -905,7 +808,7 @@ public class SheetCommands {
                 if (allies.isEmpty()) {
                     return "No alliance or allies are set.\n" + GuildKey.ALLIANCE_ID.getCommandMention() + "\nOR\n " + "CM.coalition.create.cmd.create(null, Coalition.ALLIES.name())" + "";
                 } else {
-                    counterWith = new HashSet<>(Trocutus.imp().getDB().getKingdomsMatching(f -> allies.contains(f.getAlliance_id()));
+                    counterWith = new HashSet<>(Trocutus.imp().getDB().getKingdomsMatching(f -> allies.contains(f.getAlliance_id())));
                 }
             } else {
                 counterWith = new HashSet<>(Trocutus.imp().getDB().getKingdomsMatching(f -> aaIds.contains(f.getAlliance_id())));

@@ -24,6 +24,7 @@ import link.locutus.util.DiscordUtil;
 import link.locutus.util.MarkupUtil;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
+import link.locutus.util.TrounceUtil;
 import net.dv8tion.jda.api.entities.User;
 import org.json.JSONObject;
 
@@ -40,6 +41,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class BasicCommands {
@@ -253,7 +255,7 @@ public class BasicCommands {
     }
 
     @Command
-    public String raid(DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("g") boolean sortGold, @Switch("l") boolean sortLand) throws IOException {
+    public String raid(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("g") boolean sortGold, @Switch("l") boolean sortLand, @Switch("i") boolean ignoreLosses, @Switch("dnr") boolean ignoreDoNotRaid) throws IOException {
         if (sortGold && sortLand) {
             sortGold = false;
             sortLand = false;
@@ -269,9 +271,15 @@ public class BasicCommands {
         if (memberInfo == null) return "Could not find member info for " + myKingdom.getName();
 
         // -50% -> 50%
-        double minScore = memberInfo.land.total * 0.5;
-        double maxScore = memberInfo.land.total * 1.5;
+        int minScore = TrounceUtil.getMinScoreRange(memberInfo.land.total, true);
+        int maxScore = TrounceUtil.getMaxScoreRange(memberInfo.land.total, true);
         Set<DBKingdom> inRange = realm.getKindoms(f -> f.getTotal_land() >= minScore && f.getTotal_land() <= maxScore);
+
+        Function<DBKingdom, Boolean> canRaid;
+        if (ignoreDoNotRaid) canRaid = f -> true;
+        else canRaid = db.getCanRaid();
+        inRange.removeIf(f -> !canRaid.apply(f));
+
         Map<DBKingdom, DBSpy> spyops = new HashMap<>();
         List<Map.Entry<DBKingdom, Long>> values = new ArrayList<>();
 
@@ -283,13 +291,15 @@ public class BasicCommands {
             double defenderRatio = kingdom.getTotal_land() / (double) memberInfo.land.total;
             double landLoot = 0.1 * kingdom.getTotal_land() * (Math.pow(defenderRatio, 2.2));
 
+            double losses = ignoreLosses ? 0 : spy.defense * 3;
+
             double value;
             if (sortGold) {
-                value = goldLoot;
+                value = goldLoot - losses;
             } else if(sortLand) {
-                value = landLoot;
+                value = landLoot - losses;
             } else {
-                value = goldLoot + landLoot * 500;
+                value = goldLoot + landLoot * 500 - losses;
             }
             values.add(Map.entry(kingdom, (long) value));
         }
@@ -318,6 +328,49 @@ public class BasicCommands {
             response.append("Resource: `" + kingdom.getResource_level() + "` | Alert: `" + kingdom.getAlert_level() + "`\n\n");
         }
 
+        double optimalBothFey = 0;
+        double optimalBothValue = 0;
+
+        double optimalGoldFey = 0;
+        double optimalGoldValue = 0;
+
+        double optimalLandFey = 0;
+        double optimalLandValue = 0;
+
+        for (int land = minScore; land <= maxScore; land++) {
+            double dpa = TrounceUtil.getFeyDPA(land);
+            double strength = dpa * land;
+            if (strength > memberInfo.stats.attack) break; // can't beat it :(
+
+            double losses = strength * 3;
+            double loot = 88 * land * 0.2;
+            double landLoot = TrounceUtil.landLoot(memberInfo.land.total, land);
+            double netBoth = loot + landLoot * 500 - losses;
+            double netLand = landLoot * 500 - losses;
+            double netGold = loot - losses;
+            if (netBoth > optimalBothValue) {
+                optimalBothValue = netBoth;
+                optimalBothFey = land;
+            }
+            if (netLand > optimalLandValue) {
+                optimalLandValue = netLand;
+                optimalLandFey = land;
+            }
+            if (netGold > optimalGoldValue) {
+                optimalGoldValue = netGold;
+                optimalGoldFey = land;
+            }
+        }
+
+        double fey = TrounceUtil.getFeyLand(myKingdom.getTotal_land(), memberInfo.stats.attack);
+
+        response.append("\n`note: Your army is on par with fey of approx. ~" + MathMan.format(fey) + " land`");
+        response.append("\n`note: Optimal fey targets`");
+        // both
+        response.append("\n` - land+gold: " + MathMan.format(optimalBothFey) + " land -> net $" + MathMan.format((long) optimalBothValue) + "`");
+        response.append("\n` - land: " + MathMan.format(optimalLandFey) + " land -> net $" + MathMan.format((long) optimalLandValue) + "`");
+        response.append("\n` - gold: " + MathMan.format(optimalGoldFey) + " land -> net $" + MathMan.format((long) optimalGoldValue) + "`");
+
         response.append("\n\n`note: Please use '/spyop' to find suitable kingdoms to spy`");
         response.append("\n`note: you loot 20% of your opponents unprotected gold`");
         response.append("\n`note: you need 1 more attack than enemy defense to win`");
@@ -325,7 +378,7 @@ public class BasicCommands {
     }
 
     @Command
-    public String spyop(DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("5") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin) throws IOException {
+    public String spyop(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("5") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin, @Switch("dnr") boolean ignoreDoNotRaid) throws IOException {
         DBKingdom myKingdom = me.get(realm);
         if (myKingdom == null) return "You are not in a kingdom in this realm";
 
@@ -340,6 +393,11 @@ public class BasicCommands {
         int maxScore = (int) (myKingdom.getTotal_land() * 1.5);
 
         Set<DBKingdom> inRange = realm.getKindoms(f -> f.getTotal_land() >= minScore && f.getTotal_land() <= maxScore);
+
+        Function<DBKingdom, Boolean> canRaid;
+        if (ignoreDoNotRaid) canRaid = f -> true;
+        else canRaid = db.getCanRaid();
+        inRange.removeIf(f -> !canRaid.apply(f));
 
         if (noAlliance) {
             inRange.removeIf(k -> k.getAlliance_id() != 0);

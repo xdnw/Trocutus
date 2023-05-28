@@ -5,6 +5,7 @@ import com.google.common.eventbus.EventBus;
 import link.locutus.Trocutus;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.api.game.TreatyType;
 import link.locutus.core.db.DBMain;
 import link.locutus.core.db.entities.alliance.AllianceList;
 import link.locutus.core.db.entities.alliance.DBAlliance;
@@ -661,7 +662,10 @@ public class GuildDB extends DBMain implements KingdomOrAllianceOrGuild {
         if (checkTreaties) {
             for (int allianceId : getAllianceIds()) {
                 Map<Integer, DBTreaty> treaties = Trocutus.imp().getDB().getTreaties(allianceId);
-                dnr.addAll(treaties.keySet());
+                for (Map.Entry<Integer, DBTreaty> entry : treaties.entrySet()) {
+                    if (entry.getValue().getType() == TreatyType.WAR || entry.getValue().getType() == TreatyType.LAP) continue;
+                    dnr.add(entry.getKey());
+                }
             }
         }
 

@@ -2,17 +2,17 @@ package link.locutus.util;
 
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.AttackOrSpellType;
+import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
-import link.locutus.core.db.entities.kingdom.SimpleKingdomList;
 import link.locutus.core.db.entities.spells.SpellOp;
+import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.util.builder.SummedMapRankBuilder;
 import link.locutus.util.spreadsheet.SpreadSheet;
 
-import java.nio.ByteBuffer;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -21,10 +21,12 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -34,20 +36,77 @@ public class SpyBlitzGenerator {
     private final Map<DBKingdom, Double> attList;
     private final Map<DBKingdom, Double> defList;
     private final Set<AttackOrSpellType> allowedTypes;
-    private final int maxDef;
-    private final boolean checkEspionageSlots;
-    private final Integer minRequiredSpies;
-    private final boolean prioritizeKills;
-    private boolean forceUpdate;
+    private final int maxDefAttacks;
+    private final int maxDefSpells;
+    private final boolean skipCheckAlert;
+    private final boolean skipCheckSpellAlert;
+    private final boolean unitDamage;
+    private final boolean landDamage;
+    private final boolean useNet;
 
     private Map<Integer, Double> allianceWeighting = new HashMap<>();
+
+    public static void generateSpySheet(SpreadSheet sheet, Map<DBKingdom, List<SpellOp>> opsAgainstKingdoms) {
+        List<Object> header = new ArrayList<>(Arrays.asList(
+                "nation",
+                "alliance",
+                "score",
+                "attack",
+                "defense",
+                "active_m",
+                "att1",
+                "att2",
+                "att3"
+        ));
+
+        sheet.setHeader(header);
+
+        boolean multipleAAs = false;
+        DBKingdom prevAttacker = null;
+        for (List<SpellOp> spyOpList : opsAgainstKingdoms.values()) {
+            for (SpellOp spyop : spyOpList) {
+                DBKingdom attacker = spyop.getAttacker();
+                if (prevAttacker != null && prevAttacker.getAlliance_id() != attacker.getAlliance_id()) {
+                    multipleAAs = true;
+                }
+                prevAttacker = attacker;
+            }
+        }
+
+        for (Map.Entry<DBKingdom, List<SpellOp>> entry : opsAgainstKingdoms.entrySet()) {
+            DBKingdom nation = entry.getKey();
+
+            ArrayList<Object> row = new ArrayList<>();
+            row.add(MarkupUtil.sheetUrl(nation.getName(), TrounceUtil.getUrl(nation.getId(), false)));
+            row.add(MarkupUtil.sheetUrl(nation.getAllianceName(), TrounceUtil.getUrl(nation.getAlliance_id(), true)));
+            row.add(nation.getScore());
+            row.add("" + nation.getAttackStrength());
+            row.add("" + nation.getDefenseStrength());
+            row.add("" + nation.getActive_m());
+
+            for (SpellOp spyop : entry.getValue()) {
+                DBKingdom attacker = spyop.getAttacker();
+                String attStr = MarkupUtil.sheetUrl(attacker.getName(), TrounceUtil.getUrl(attacker.getId(), false));
+
+                if (multipleAAs) {
+                    attStr += "& \"|" + spyop.getType().name() + "|" + attacker.getAllianceName() + "\"";
+                } else {
+                    attStr += "& \"|" + spyop.getType().name() + "\"";
+                }
+
+                row.add(attStr);
+            }
+
+            sheet.addRow(row);
+        }
+    }
 
     public SpyBlitzGenerator setAllianceWeighting(DBAlliance alliance, double weight) {
         allianceWeighting.put(alliance.getAlliance_id(), weight);
         return this;
     }
 
-    public SpyBlitzGenerator(Set<DBKingdom> attackers, Set<DBKingdom> defenders, Set<AttackOrSpellType> allowedTypes, boolean forceUpdate, int maxDef, boolean checkEspionageSlots, Integer minRequiredSpies, boolean prioritizeKills) {
+    public SpyBlitzGenerator(Set<DBKingdom> attackers, Set<DBKingdom> defenders, Set<AttackOrSpellType> allowedTypes, int maxDefSpells, int maxDefAttacks, boolean skipCheckAlert, boolean skipCheckSpellAlert, boolean unitDamage, boolean landDamage, boolean net) {
         Set<Integer> attRealms = attackers.stream().map(DBKingdom::getRealm_id).collect(Collectors.toSet());
         Set<Integer> defRealms = defenders.stream().map(DBKingdom::getRealm_id).collect(Collectors.toSet());
         if (attRealms.size() > 1) {
@@ -58,34 +117,31 @@ public class SpyBlitzGenerator {
         }
 
         this.allowedTypes = allowedTypes;
-        this.maxDef = maxDef;
-        this.checkEspionageSlots = checkEspionageSlots;
-        this.minRequiredSpies = minRequiredSpies;
-        this.prioritizeKills = prioritizeKills;
-        this.forceUpdate = forceUpdate;
+        this.maxDefSpells = maxDefSpells;
+        this.maxDefAttacks = maxDefAttacks;
+
+        this.skipCheckAlert = skipCheckAlert;
+        this.skipCheckSpellAlert = skipCheckSpellAlert;
+        this.unitDamage = unitDamage;
+        this.landDamage = landDamage;
+        this.useNet = net;
+
 
         this.attList = sortKingdoms(attackers, true);
         this.defList = sortKingdoms(defenders, false);
     }
 
-    public Map<DBKingdom, List<SpellOp>> assignTargets(BiFunction<DBKingdom, List<SpellOp>, Integer> getNumOps, Predicate<AttackOrSpellType> allowWeaker, boolean unitDamage, boolean landDamage, boolean net) {
+    public Map<DBKingdom, List<SpellOp>> assignTargets(Function<DBKingdom, Map<MilitaryUnit, Long>> getBpAndMana, Predicate<AttackOrSpellType> allowWeaker, boolean unitDamage, boolean landDamage, boolean net, boolean skipNegativeNet) {
         BiFunction<Double, Double, Integer> attRange = TrounceUtil.getIsKingdomsInSpyRange(attList.keySet());
         BiFunction<Double, Double, Integer> defSpyRange = TrounceUtil.getIsKingdomsInSpyRange(defList.keySet());
 
         BiFunction<Double, Double, Integer> attScoreRange = TrounceUtil.getIsKingdomsInScoreRange(attList.keySet());
         BiFunction<Double, Double, Integer> defScoreRange = TrounceUtil.getIsKingdomsInScoreRange(defList.keySet());
 
-        defList.entrySet().removeIf(n -> attScoreRange.apply(n.getKey().getScore() * 0.75, n.getKey().getScore() / 0.75) == 0);
+        defList.entrySet().removeIf(n -> attScoreRange.apply(n.getKey().getScore() * 0.5, n.getKey().getScore() * 1.5) == 0);
 
         BiFunction<Double, Double, Double> attSpyGraph = TrounceUtil.getXInRange(attList.keySet(), n -> Math.pow(attList.get(n), 3));
         BiFunction<Double, Double, Double> defSpyGraph = TrounceUtil.getXInRange(defList.keySet(), n -> Math.pow(defList.get(n), 3));
-
-        if (forceUpdate) {
-            forceUpdate = false;
-            List<DBKingdom> allKingdoms = new ArrayList<>();
-            allKingdoms.addAll(attList.keySet());
-            allKingdoms.addAll(defList.keySet());
-        }
 
         List<SpellOp> ops = new ArrayList<>();
 
@@ -102,10 +158,17 @@ public class SpyBlitzGenerator {
                 boolean weaker = myStrength < defStrength;
 
                 AttackOrSpellType bestSpell = null;
-                double maxDamage = 0;
+                double maxDamage = Double.MIN_VALUE;
                 for (AttackOrSpellType operation : allowedOpTypes) {
                     if (weaker && !allowWeaker.test(operation)) continue;
                     double damage = operation.getDefaultDamage(attacker, defender, myStrength, defStrength, unitDamage, landDamage, net);
+                    double netDamage = damage;
+                    if (!net) {
+                        netDamage = operation.getDefaultDamage(attacker, defender, myStrength, defStrength, unitDamage, landDamage, true);
+                    }
+                    if (skipNegativeNet && netDamage < 0) {
+                        continue;
+                    }
                     if (damage > maxDamage) {
                         maxDamage = damage;
                         bestSpell = operation;
@@ -129,13 +192,35 @@ public class SpyBlitzGenerator {
 
         for (SpellOp op : ops) {
             List<SpellOp> attOps = opsByKingdoms.computeIfAbsent(op.getAttacker(), f -> new ArrayList<>());
-            if (attOps.size() >= getNumOps.apply(op.getAttacker(), attOps)) {
-                continue;
+
+            Map<MilitaryUnit, Long> bpMana = getBpAndMana.apply(op.getAttacker());
+            int bp = bpMana.getOrDefault(MilitaryUnit.BATTLE_POINTS, 0L).intValue();
+            int mana = bpMana.getOrDefault(MilitaryUnit.MANA, 0L).intValue();
+            // subtract bp/mana
+            for (SpellOp attOp : attOps) {
+                bp -= attOp.getType().getBattlePoints();
+                mana -= attOp.getType().getMana();
             }
+
+            if (bp < op.getType().getBattlePoints()) continue;
+            if (mana < op.getType().getMana()) continue;
+
             List<SpellOp> defOps = opsAgainstKingdoms.computeIfAbsent(op.getTarget(), f -> new ArrayList<>());
-            if (defOps.size() >= maxDef) {
-                continue;
+            int remainingDefSpells = maxDefSpells;
+            int remainingDefAttacks = maxDefAttacks;
+            for (SpellOp defOp : defOps) {
+                if (defOp.getType().isAttackAlert()) {
+                    remainingDefAttacks--;
+                }
+                if (defOp.getType().isSpellAlert()) {
+                    remainingDefSpells--;
+                }
             }
+
+            if (remainingDefAttacks <= 0 && op.getType().isAttackAlert()) continue;
+            if (remainingDefSpells <= 0 && op.getType().isSpellAlert()) continue;
+
+
             defOps.add(op);
             attOps.add(op);
         }
@@ -157,8 +242,13 @@ public class SpyBlitzGenerator {
         list.removeIf(f -> f.getActive_m() > 1440);
         list.removeIf(f -> f.isVacation());
         list.removeIf(f -> f.getPosition().ordinal() <= Rank.APPLICANT.ordinal());
-        if (checkEspionageSlots && !isAttacker) {
-            list.removeIf(f -> f.getSpell_alert() != 0);
+        if (!isAttacker) {
+            if (!skipCheckAlert) {
+                list.removeIf(f -> f.getAlert_level() > 0);
+            }
+            if (!skipCheckSpellAlert) {
+                list.removeIf(f -> f.getSpell_alert() > 0);
+            }
         }
         Map<DBKingdom, Double> spyValueMap = new LinkedHashMap<>();
         for (DBKingdom nation : list) {
@@ -170,16 +260,13 @@ public class SpyBlitzGenerator {
         return new SummedMapRankBuilder<>(spyValueMap).sort().get();
     }
 
-    public static Map<DBKingdom, Set<SpellOp>> getTargets(SpreadSheet sheet, int headerRow) {
-        return getTargets(sheet, headerRow, true);
-    }
-
-    public static Map<DBKingdom, Set<SpellOp>> getTargets(SpreadSheet sheet, int headerRow, boolean groupByAttacker) {
+    public static Map<DBKingdom, Set<SpellOp>> getTargets(SpreadSheet sheet, int headerRow, BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String> invalidOut) {
         List<List<Object>> rows = sheet.getAll();
         List<Object> header = rows.get(headerRow);
 
         Integer targetI = null;
         Integer attI = null;
+        Integer allianceI = null;
         List<Integer> targetsIndexesRoseFormat = new ArrayList<>();
 
         boolean isReverse = false;
@@ -199,6 +286,8 @@ public class SpyBlitzGenerator {
             } else if (title.toLowerCase().startsWith("spy slot ")) {
                 targetsIndexesRoseFormat.add(i);
                 targetI = 0;
+            } else if (title.equalsIgnoreCase("alliance") && allianceI == null) {
+                allianceI = i;
             }
         }
 
@@ -223,7 +312,20 @@ public class SpyBlitzGenerator {
             DBKingdom defender = !isReverse ? nation : null;
 
             if (nation == null) {
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, attacker), ("`" + cell.toString() + "` is an invalid nation\n"));
                 continue;
+            }
+
+            if (allianceI != null && rows.size() > allianceI) {
+                Object aaCell = row.get(allianceI);
+                if (aaCell != null) {
+                    String allianceStr = aaCell.toString();
+                    DBAlliance alliance = DBAlliance.parse(allianceStr);
+                    if (alliance != null && nation.getAlliance_id() != alliance.getAlliance_id()) {
+                        String response = ("Kingdom: `" + nationStr + "` is no longer in alliance: `" + allianceStr + "`\n");
+                        invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, attacker), response);
+                    }
+                }
             }
 
             if (attI != null) {
@@ -235,7 +337,11 @@ public class SpyBlitzGenerator {
                     String[] split = cellStr.split("\\|");
 
                     DBKingdom other = DBKingdom.parse(split[0]);
-                    if (other == null) continue;
+                    if (other == null) {
+                        String response = ("`" + cell.toString() + "` is an invalid nation\n");
+                        invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, attacker), response);
+                        continue;
+                    }
                     if (isReverse) {
                         defender = other;
                     } else {
@@ -250,5 +356,185 @@ public class SpyBlitzGenerator {
             }
         }
         return targets;
+    }
+
+    public static void validateTargets(Map<DBKingdom, Set<SpellOp>> targets,
+                                                            Function<DBKingdom, Map<MilitaryUnit, Long>> getBpMana,
+                                                            double minScoreMultiplier, double maxScoreMultiplier,
+                                                            boolean checkUpdeclare,
+                                                            boolean checkAttackSlots,
+                                                            boolean checkSpellSlots,
+                                                            int maxDefAttacks,
+                                                            int maxDefSpells,
+                                                            Function<DBKingdom, Boolean> isValidTarget,
+                                                            BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String> invalidOut) {
+
+        Set<DBKingdom> allAttackers = new HashSet<>();
+        Set<DBKingdom> allDefenders = new HashSet<>();
+
+        Map<DBKingdom, Set<SpellOp>> opsByAttacker = new LinkedHashMap<>();
+        Map<DBKingdom, Set<SpellOp>> opsByDefender = new LinkedHashMap<>();
+
+        List<SpellOp> allOps = new ArrayList<>();
+        for (Map.Entry<DBKingdom, Set<SpellOp>> entry : targets.entrySet()) {
+            for (SpellOp op : entry.getValue()) {
+                allAttackers.add(op.getAttacker());
+                allDefenders.add(op.getTarget());
+
+                opsByAttacker.computeIfAbsent(op.getAttacker(), f -> new LinkedHashSet<>()).add(op);
+                opsByDefender.computeIfAbsent(op.getTarget(), f -> new LinkedHashSet<>()).add(op);
+            }
+            allOps.addAll(entry.getValue());
+        }
+
+        for (SpellOp op : allOps) {
+            process(op.getAttacker(),
+                    opsByAttacker.get(op.getAttacker()),
+                    op.getTarget(),
+                    opsByDefender.get(op.getTarget()),
+                    getBpMana,
+                    minScoreMultiplier,
+                    maxScoreMultiplier,
+                    checkUpdeclare,
+                    checkAttackSlots,
+                    checkSpellSlots,
+                    maxDefAttacks,
+                    maxDefSpells,
+                    invalidOut
+            );
+        }
+
+
+
+        for (DBKingdom attacker : allAttackers) {
+            if (attacker.getActive_m() > 4880) {
+                String response = ("Attacker: `" + attacker.getName() + "` is inactive");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(null, attacker), response);
+            } else if (attacker.isVacation()) {
+                String response = ("Attacker: `" + attacker.getName() + "` is in VM " + attacker.isVacation());
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(null, attacker), response);
+            }
+        }
+
+        for (DBKingdom defender : allDefenders) {
+            if (!isValidTarget.apply(defender)) {
+                String response = ("Defender: `" + defender.getName() + "` is not an enemy");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, null), response);
+            } else if (defender.getActive_m() > TimeUnit.DAYS.toMinutes(8)) {
+                String response = ("Defender: `" + defender.getName() + "` is inactive");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, null), response);
+            } else if (defender.isVacation()) {
+                String response = ("Defender: `" + defender.getName() + "` is in VM " + defender.isVacation() + "");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, null), response);
+            }
+        }
+    }
+
+    private static void process(DBKingdom attacker,
+                                Set<SpellOp> attOps,
+                                DBKingdom defender,
+                                Set<SpellOp> defOps,
+                                Function<DBKingdom, Map<MilitaryUnit, Long>> getBpAndMana,
+                                double minScoreMultiplier,
+                                double maxScoreMultiplier,
+                                boolean checkUpdeclare,
+                                boolean checkAttackSlots,
+                                boolean checkSpellSlots,
+                                int maxDefAttacks,
+                                int maxDefSpells,
+                                BiConsumer<Map.Entry<DBKingdom, DBKingdom>, String> invalidOut) {
+        double minScore = attacker.getScore() * minScoreMultiplier;
+        double maxScore = attacker.getScore() * maxScoreMultiplier;
+
+
+
+        if (defender.getScore() < minScore) {
+            double diff = Math.round((minScore - defender.getScore()) * 100) / 100d;
+            String response = ("`" + defender.getName() + "` is " + MathMan.format(diff) + "ns below " + "`" + attacker.getName() + "`");
+            invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, attacker), response);
+            return;
+        }
+        if (defender.getScore() > maxScore) {
+            double diff = Math.round((defender.getScore() - maxScore) * 100) / 100d;
+            String response = ("`" + defender.getName() + "` is " + MathMan.format(diff) + "ns above " + "`" + attacker.getName() + "`");
+            invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, attacker), response);
+        }
+
+        if (checkUpdeclare) {
+            int attStr = attacker.getAttackStrength();
+            int defStr = defender.getDefenseStrength();
+            if (defStr > attStr) {
+                double ratio = (double) defStr / attStr;
+                String response = ("`" + defender.getName() + "` is " + MathMan.format(ratio) + "x stronger than " + "`" + attacker.getName() + "`");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, attacker), response);
+                return;
+            }
+        }
+
+        {
+            Map<MilitaryUnit, Long> bpMana = getBpAndMana.apply(attacker);
+            int bp = bpMana.getOrDefault(MilitaryUnit.BATTLE_POINTS, 0L).intValue();
+            int mana = bpMana.getOrDefault(MilitaryUnit.MANA, 0L).intValue();
+            int originalBp = bp;
+            int originalMana = mana;
+            // subtract bp/mana
+            for (SpellOp attOp : attOps) {
+                bp -= attOp.getType().getBattlePoints();
+                mana -= attOp.getType().getMana();
+            }
+
+            if (bp < 0) {
+                String response = ("Attacker: `" + attacker.getName() + "` is assigned more ops than they have BP for (" + originalBp + " -> " + bp + ")");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(null, attacker), response);
+                return;
+            }
+            if (mana < 0) {
+                String response = ("Attacker: `" + attacker.getName() + "` is assigned more ops than they have Mana for (" + originalMana + " -> " + mana + ")");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(null, attacker), response);
+                return;
+            }
+
+            int remainingDefSpells = maxDefSpells;
+            int remainingDefAttacks = maxDefAttacks;
+            for (SpellOp defOp : defOps) {
+                if (defOp.getType().isAttackAlert()) {
+                    remainingDefAttacks--;
+                }
+                if (defOp.getType().isSpellAlert()) {
+                    remainingDefSpells--;
+                }
+            }
+
+            if (remainingDefAttacks < 0 && checkAttackSlots) {
+                String response = ("Defender: `" + defender.getName() + "` has more than " + maxDefAttacks + " war ops assigned");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, null), response);
+                return;
+            }
+            if (remainingDefSpells < 0 && checkSpellSlots) {
+                String response = ("Defender: `" + defender.getName() + "` has more than " + maxDefSpells + " spell ops assigned");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, null), response);
+                return;
+            }
+
+            if (checkAttackSlots && defender.getAlert_level() > 0 && remainingDefAttacks < maxDefAttacks) {
+                String response = ("Defender: `" + defender.getName() + "` is alert " + defender.getAlert_level() + "");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, null), response);
+            }
+            if (checkSpellSlots && defender.getSpell_alert() > 0 && remainingDefSpells < maxDefSpells) {
+                String response = ("Defender: `" + defender.getName() + "` is spell alerted " + defender.getSpell_alert() + "");
+                invalidOut.accept(new AbstractMap.SimpleEntry<>(defender, null), response);
+            }
+        }
+    }
+
+    public static Map<DBKingdom, Set<DBKingdom>> reverse(Map<DBKingdom, Set<DBKingdom>> targets) {
+        Map<DBKingdom, Set<DBKingdom>> reversed = new LinkedHashMap<>();
+        for (Map.Entry<DBKingdom, Set<DBKingdom>> entry : targets.entrySet()) {
+            DBKingdom defender = entry.getKey();
+            for (DBKingdom attacker : entry.getValue()) {
+                reversed.computeIfAbsent(attacker, f -> new LinkedHashSet<>()).add(defender);
+            }
+        }
+        return reversed;
     }
 }

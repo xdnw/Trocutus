@@ -181,7 +181,7 @@ public class StatCommands {
             @Override
             public Double apply(DBKingdom kingdom) {
                 if (col1StrPerScore != null) return col1StrPerScore * kingdom.getScore();
-                return kingdom.getAverageStrength();
+                return (double) kingdom.getAverageStrength();
             }
         };
 
@@ -189,7 +189,7 @@ public class StatCommands {
             @Override
             public Double apply(DBKingdom kingdom) {
                 if (col2StrPerScore != null) return col2StrPerScore * kingdom.getScore();
-                return kingdom.getAverageStrength();
+                return (double) kingdom.getAverageStrength();
             }
         };
 
@@ -500,27 +500,28 @@ public class StatCommands {
                              @Arg("Rank by nation instead of alliance")
                              @Switch("a") boolean rankByKingdom,
                              @Arg("Only rank wars with these statuses")
-                             @Switch("s") Set<AttackOrSpellType> types) {
-        WarParser parser = WarParser.of(attackers, defenders, time, Long.MAX_VALUE);
-        Map<Integer, DBWar> wars = parser.getWars();
+                             @Switch("s") Set<AttackOrSpellType> allowedTypes) {
+        WarParser parser = WarParser.of("coalition 1", "Coalition 2", attackers, defenders, time, Long.MAX_VALUE);
+        if (allowedTypes != null) parser.allowedWarTypes(allowedTypes);
+        List<AttackOrSpell> ops = parser.getAttackOrSpells();
 
-        SummedMapRankBuilder<Integer, Double> ranksUnsorted = new RankBuilder<>(wars.values()).group(new BiConsumer<DBWar, GroupedRankBuilder<Integer, DBWar>>() {
+        SummedMapRankBuilder<Integer, Double> ranksUnsorted = new RankBuilder<>(ops).group(new BiConsumer<AttackOrSpell, GroupedRankBuilder<Integer, AttackOrSpell>>() {
             @Override
-            public void accept(DBWar dbWar, GroupedRankBuilder<Integer, DBWar> builder) {
-                if (warType != null && dbWar.warType != warType) return;
-                if (statuses != null && !statuses.contains(dbWar.status)) return;
+            public void accept(AttackOrSpell dbWar, GroupedRankBuilder<Integer, AttackOrSpell> builder) {
                 if (!rankByKingdom) {
-                    if (dbWar.attacker_aa != 0 && !onlyDefensives) builder.put(dbWar.attacker_aa, dbWar);
-                    if (dbWar.defender_aa != 0 && !onlyOffensives) builder.put(dbWar.defender_aa, dbWar);
+                    if (dbWar.getAttacker_aa() != 0 && !onlyDefensives) builder.put(dbWar.getAttacker_aa(), dbWar);
+                    if (dbWar.getDefender_aa() != 0 && !onlyOffensives) builder.put(dbWar.getDefender_aa(), dbWar);
                 } else {
-                    if (!onlyDefensives) builder.put(dbWar.attacker_id, dbWar);
-                    if (!onlyOffensives) builder.put(dbWar.defender_id, dbWar);
+                    if (!onlyDefensives) builder.put(dbWar.getAttacker_id(), dbWar);
+                    if (!onlyOffensives) builder.put(dbWar.getDefender_id(), dbWar);
                 }
             }
         }).sumValues(f -> 1d);
         if (normalizePerMember && !rankByKingdom) {
             ranksUnsorted = ranksUnsorted.adapt((aaId, numWars) -> {
-                int num = DBAlliance.getOrCreate(aaId).getKingdoms(true, ignore2dInactives ? 2440 : Integer.MAX_VALUE, true).size();
+                DBAlliance aa = DBAlliance.get(aaId);
+                if (aa == null) return 0d;
+                int num = aa.getKingdoms(true, ignore2dInactives ? 2440 : Integer.MAX_VALUE, true).size();
                 if (num == 0) return 0d;
                 return numWars / (double) num;
             });

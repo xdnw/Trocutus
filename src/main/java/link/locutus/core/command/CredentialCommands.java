@@ -70,7 +70,7 @@ public class CredentialCommands {
         if (Trocutus.imp().getDB().getUserPass(author.getIdLong()) != null) {
             Trocutus.imp().getDB().logout(author.getIdLong());
             if (me != null) {
-                Trocutus.imp().getDB().logout(me.getId());
+                Trocutus.imp().getDB().logout(author.getIdLong());
             }
             return "Logged out";
         }

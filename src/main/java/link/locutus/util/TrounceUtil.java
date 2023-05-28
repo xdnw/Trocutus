@@ -1,11 +1,14 @@
 package link.locutus.util;
 
+import com.google.common.reflect.TypeToken;
+import com.google.gson.Gson;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -114,17 +117,23 @@ public class TrounceUtil {
         }
     }
 
-    public double getFeyLand(int myLand, int attack) {
+    public static int landLoot(int attackerAcres, int defenderAcres) {
+        double defenderRatio = (double) defenderAcres / attackerAcres;
+        double loot = 0.1 * attackerAcres * Math.pow(defenderRatio, 2.2);
+        return (int) Math.round(loot);
+    }
+
+    public static double getFeyLand(int myLand, int attack) {
         if (myLand < 20000) {
-            return Math.sqrt(20000 * attack / 20d);
+            return Math.sqrt(20000d * attack / 20d);
         } else if (myLand < 50000) {
-            return Math.sqrt(20000 * 20 + 30000 * (attack - 20) / 20d);
+            return Math.sqrt(20000d * 20 + 30000 * (attack - 20d) / 20d);
         } else {
             return attack / 40d;
         }
     }
 
-    public double getFeyDPA(int land) {
+    public static double getFeyDPA(int land) {
         double dpa;
         if (land < 20000) {
             dpa = 20 * land / 20000d;
@@ -211,5 +220,44 @@ public class TrounceUtil {
                 return scoreRange[(int) Math.ceil(max)] - scoreRange[min.intValue()];
             }
         };
+    }
+
+    public static Map<MilitaryUnit, Long> parseUnits(String arg) {
+        arg = arg.trim();
+        if (!arg.contains(":") && !arg.contains("=")) arg = arg.replaceAll("[ ]+", ":");
+        arg = arg.replace(" ", "").replace('=', ':').replaceAll("([0-9]),([0-9])", "$1$2").toUpperCase();
+
+        double sign = 1;
+        if (arg.charAt(0) == '-') {
+            sign = -1;
+            arg = arg.substring(1);
+        }
+        int preMultiply = arg.indexOf("*{");
+        int postMultiply = arg.indexOf("}*");
+        if (preMultiply != -1) {
+            String[] split = arg.split("\\*\\{", 2);
+            arg = "{" + split[1];
+            sign *= MathMan.parseDouble(split[0]);
+        }
+        if (postMultiply != -1) {
+            String[] split = arg.split("\\}\\*", 2);
+            arg = split[0] + "}";
+            sign *= MathMan.parseDouble(split[1]);
+        }
+
+        Type type = new TypeToken<Map<MilitaryUnit, Long>>() {}.getType();
+        if (arg.charAt(0) != '{' && arg.charAt(arg.length() - 1) != '}') {
+            arg = "{" + arg + "}";
+        }
+        Map<MilitaryUnit, Long> result = new Gson().fromJson(arg, type);
+        if (result.containsKey(null)) {
+            throw new IllegalArgumentException("Invalid resource type specified in map: `" + arg + "`");
+        }
+        if (sign != 1) {
+            for (Map.Entry<MilitaryUnit, Long> entry : result.entrySet()) {
+                entry.setValue((long) (entry.getValue() * sign));
+            }
+        }
+        return result;
     }
 }

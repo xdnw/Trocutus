@@ -359,7 +359,7 @@ public class InterviewCommands {
     }
 
     @Command(desc = "Create an interview channel")
-    public String interview(@Me GuildDB db, @Default("%user%") User user, DBKingdom kingdom) {
+    public String interview(@Me GuildDB db, DBKingdom kingdom, @Default("%user%") User user) {
         Map<DBRealm, DBKingdom> kingdoms = DBKingdom.getFromUser(user);
         if (kingdoms.isEmpty() || !kingdoms.containsValue(kingdom)) {
             return "You are not registered to `" + kingdom.getName() + "`. Please register using `\"CM.register\"`";

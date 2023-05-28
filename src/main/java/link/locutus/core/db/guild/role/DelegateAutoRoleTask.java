@@ -12,11 +12,6 @@ public class DelegateAutoRoleTask implements IAutoRoleTask {
     private final IAutoRoleTask task;
 
     @Override
-    public void autoRoleCities(Member member, Supplier<DBKingdom> nationSup, Consumer<String> output, Consumer<Future> tasks) {
-        task.autoRoleCities(member, nationSup, output, tasks);
-    }
-
-    @Override
     public void autoRoleAll(Consumer<String> output) {
         task.autoRoleAll(output);
     }

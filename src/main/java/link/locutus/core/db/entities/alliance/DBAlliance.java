@@ -64,6 +64,11 @@ public class DBAlliance implements KingdomOrAlliance {
             DBAlliance aa = Trocutus.imp().getDB().getAlliance(Integer.parseInt(input));
             if (aa != null) return aa;
         }
+        if (input.contains("/alliance/")) {
+            String[] split = input.split("/");
+            // last arg
+            input = split[split.length - 1];
+        }
         if (input.contains("/")) {
             String[] split = input.split("/", 2);
             DBRealm realm = DBRealm.parse(split[0]);
@@ -71,7 +76,8 @@ public class DBAlliance implements KingdomOrAlliance {
             Set<DBAlliance> matching = Trocutus.imp().getDB().getAllianceMatching(f -> f.realm_id == realm.getId() && f.getName().equalsIgnoreCase(split[1]));
             if (matching.size() >= 1) return matching.iterator().next();
         }
-        Set<DBAlliance> matching = Trocutus.imp().getDB().getAllianceMatching(f -> f.getName().equalsIgnoreCase(input));
+        String finalInput = input;
+        Set<DBAlliance> matching = Trocutus.imp().getDB().getAllianceMatching(f -> f.getName().equalsIgnoreCase(finalInput));
         return matching.isEmpty() ? null : matching.iterator().next();
     }
 

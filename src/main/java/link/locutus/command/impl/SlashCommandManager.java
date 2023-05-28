@@ -290,7 +290,11 @@ public class SlashCommandManager extends ListenerAdapter {
             for (Map.Entry<String, CommandCallable> entry : group.getSubcommands().entrySet()) {
                 String subId = entry.getKey();
                 CommandCallable subCmd = entry.getValue();
-                adaptCommands(store, finalMappings, subCmd, subId, root, discGroup, maxDescription, maxOption, breakNewlines, includeTypes, includeExample, includeRepeatedTypes, includeDescForChoices, includeOptionDesc);
+                try {
+                    adaptCommands(store, finalMappings, subCmd, subId, root, discGroup, maxDescription, maxOption, breakNewlines, includeTypes, includeExample, includeRepeatedTypes, includeDescForChoices, includeOptionDesc);
+                } catch (Throwable e) {
+                    throw new RuntimeException(subId + "\n" + e.getMessage());
+                }
             }
         } else if (callable instanceof ParametricCallable parametric) {
             List<OptionData> options = createOptions(store, parametric, maxOption, breakNewlines, includeTypes, includeExample, includeRepeatedTypes, includeDescForChoices, includeOptionDesc);

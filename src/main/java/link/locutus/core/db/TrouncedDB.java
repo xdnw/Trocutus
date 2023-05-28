@@ -43,7 +43,8 @@ import link.locutus.core.event.realm.RealmUpdateEvent;
 import link.locutus.core.event.spy.SpyCreateEvent;
 import link.locutus.core.event.treaty.TreatyCancelEvent;
 import link.locutus.core.event.treaty.TreatyCreateEvent;
-import link.locutus.core.event.treaty.TreatyUpdateEvent;
+import link.locutus.core.event.treaty.TreatyDowngradeEvent;
+import link.locutus.core.event.treaty.TreatyUpgradeEvent;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.EncryptionUtil;
 import link.locutus.util.MathMan;
@@ -1018,7 +1019,12 @@ public class TrouncedDB extends DBMain {
             Trocutus.imp().runEvent(new TreatyCreateEvent(treaty));
         }
         for (Map.Entry<DBTreaty, DBTreaty> entry : treatyUpdated.entrySet()) {
-            Trocutus.imp().runEvent(new TreatyUpdateEvent(entry.getKey(), entry.getValue()));
+            DBTreaty from = entry.getKey();
+            DBTreaty to = entry.getValue();
+            if (to.getType().ordinal() > from.getType().ordinal())
+                Trocutus.imp().runEvent(new TreatyUpgradeEvent(from, to));
+            else if (to.getType().ordinal() < from.getType().ordinal())
+                Trocutus.imp().runEvent(new TreatyDowngradeEvent(from, to));
         }
     }
 

@@ -7,7 +7,7 @@ public enum TreatyType {
     MDP,
     ;
 
-    public TreatyType parse(String input) {
+    public static TreatyType parse(String input) {
         return valueOf(input.toUpperCase());
     }
 

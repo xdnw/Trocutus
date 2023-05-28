@@ -2,17 +2,24 @@ package link.locutus.core.db.guild;
 
 import com.google.common.eventbus.Subscribe;
 import link.locutus.command.impl.discord.DiscordChannelIO;
+import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.spells.DBSpy;
+import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.event.attack.DefensiveAttackEvent;
 import link.locutus.core.event.attack.OffensiveAttackEvent;
 import link.locutus.core.event.spy.DefensiveSpyEvent;
 import link.locutus.core.event.spy.OffensiveSpyEvent;
 import link.locutus.util.DiscordUtil;
 import link.locutus.util.MathMan;
+import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+
+import java.util.function.Function;
 
 public class GuildHandler {
     private final GuildDB db;
@@ -30,14 +37,14 @@ public class GuildHandler {
     public void onDefensiveAttack(DefensiveAttackEvent event) {
         MessageChannel channel = db.getOrNull(GuildKey.DEFENSE_WAR_CHANNEL);
         String title = "Defensive Attack";
-        postAttack(channel, title, event.getAttack());
+        postAttack(channel, title, event.getAttack(), true, false);
     }
 
     @Subscribe
     public void onOffensiveAttack(OffensiveAttackEvent event) {
         MessageChannel channel = db.getOrNull(GuildKey.OFFENSIVE_WAR_CHANNEL);
         String title = "Offensive Attack";
-        postAttack(channel, title, event.getAttack());
+        postAttack(channel, title, event.getAttack(), false, true);
     }
 
     private final static String soldierChar = "\uD83D\uDC82\u200D\uFE0F";
@@ -45,7 +52,7 @@ public class GuildHandler {
     private final static String cavalryChar = "\uD83C\uDFC7";
     private final static String eliteChar = "\uD83E\uDDD9\u200D\uFE0F";
 
-    private void postAttack(MessageChannel channel, String title, DBAttack attack) {
+    private void postAttack(MessageChannel channel, String title, DBAttack attack, boolean checkPingMilcom, boolean checkDNR) {
         StringBuilder body = new StringBuilder();
         if (attack.victory) {
             body.append(" (Attacker Victory)\n");
@@ -70,7 +77,6 @@ public class GuildHandler {
             body.append("land: `" + defender.getTotal_land() + "`\n");
         }
 
-
         body.append("## Casualties\n");
         body.append("**attacker**\n```");
         body.append(String.format("%6s", attack.attacker_soldiers)).append(" " + soldierChar).append(" | ")
@@ -88,6 +94,37 @@ public class GuildHandler {
         body.append("**acre loss**: " + MathMan.format(attack.defenderAcreLoss) + " acres\n");
         body.append("**hero exp**: " + MathMan.format(attack.atkHeroExp) + "(attacker) | " + MathMan.format(attack.defHeroExp) + " (defender)\n");
         body.append("**date**: " + DiscordUtil.timestamp(attack.date, "R") + "\n");
+
+        if (defender == null || defender.getPosition().ordinal() <= Rank.APPLICANT.ordinal() && defender.getActive_m() > 1440) {
+            checkPingMilcom = false;
+        }
+
+        if (checkPingMilcom) {
+            Role role = Roles.MILCOM.toRole(db);
+            if (role != null) {
+                body.append("\n" + role.getAsMention());
+            }
+        }
+
+        if (defender != null) {
+            User user = defender.getUser();
+            if (user != null) {
+                body.append("\n" + user.getAsMention());
+            }
+        }
+
+        if (checkDNR && defender != null && attacker != null) {
+            Function<DBKingdom, Boolean> canRaid = db.getCanRaid();
+            if (!canRaid.apply(defender)) {
+                User user = attacker.getUser();
+                String userName = user == null  ? attacker.getName() : user.getAsMention();
+                body.append("\n**WARNING** " + userName + ": The attack against " + defender.getName() + " in " + defenderAllianceName + " is a violation of the Do Not Raid. (ignore this message if you were authorized)\n");
+                Role faRole = Roles.FOREIGN_AFFAIRS.toRole(db);
+                if (faRole != null) {
+                    body.append("\n" + faRole.getAsMention());
+                }
+            }
+        }
 
         new DiscordChannelIO(channel).create().embed(title, body.toString()).send();
     }
