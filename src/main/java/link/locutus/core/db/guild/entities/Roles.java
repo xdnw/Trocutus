@@ -102,7 +102,7 @@ public enum Roles {
         }
     },
     RECRUITER(20, "Role to get pinged for recruitment messages (if enabled)"),
-    ENEMY_ALERT(22, "Gets pinged when a nation leaves beige (in their score range), and they have a slot free", GuildKey.ENEMY_ALERT_CHANNEL),
+    ENEMY_ALERT(22, "Gets pinged when a nation leaves alert level (in their score range), and they have a slot free", GuildKey.ENEMY_ALERT_CHANNEL),
     WAR_ALERT_OPT_OUT(25, "Opt out of received war target alerts"),
     AUDIT_ALERT_OPT_OUT(26, "Opt out of received audit alerts"),
     BLITZ_PARTICIPANT(27, "Opt in to blitz participation (clear this regularly)", GuildKey.ALLIANCE_ID),

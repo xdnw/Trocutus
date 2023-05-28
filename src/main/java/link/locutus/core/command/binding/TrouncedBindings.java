@@ -502,7 +502,7 @@ public class TrouncedBindings extends BindingHelper {
         return metric;
     }
 
-    @Binding(value = "An alert mode for the ENEMY_ALERT_CHANNEL when enemies leave beige")
+    @Binding(value = "An alert mode for the ENEMY_ALERT_CHANNEL when enemies leave alert levels")
     public EnemyAlertChannelMode EnemyAlertChannelMode(String input) {
         return emum(EnemyAlertChannelMode.class, input);
     }

@@ -623,7 +623,7 @@ public class GuildKey {
         }
     }.setupRequirements(f -> f.requireActiveGuild());
 
-    public static GuildSetting<MessageChannel> ENEMY_ALERT_CHANNEL = new GuildChannelSetting(GuildSettingCategory.BEIGE_ALERTS) {
+    public static GuildSetting<MessageChannel> ENEMY_ALERT_CHANNEL = new GuildChannelSetting(GuildSettingCategory.AWARENESS_ALERT) {
         @Command(descMethod = "help")
         @RolePermission(Roles.ADMIN)
         public String ENEMY_ALERT_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
@@ -632,10 +632,10 @@ public class GuildKey {
 
         @Override
         public String help() {
-            return "The #channel to receive alerts when an enemy nation leaves beige";
+            return "The #channel to receive alerts when an enemy nation leaves alert level";
         }
     }.setupRequirements(f -> f.requires(ALLIANCE_ID).requiresCoalition(Coalition.ENEMIES).requireValidAlliance().requireActiveGuild());
-    public static GuildSetting<EnemyAlertChannelMode> ENEMY_ALERT_CHANNEL_MODE = new GuildEnumSetting<EnemyAlertChannelMode>(GuildSettingCategory.BEIGE_ALERTS, EnemyAlertChannelMode.class) {
+    public static GuildSetting<EnemyAlertChannelMode> ENEMY_ALERT_CHANNEL_MODE = new GuildEnumSetting<EnemyAlertChannelMode>(GuildSettingCategory.AWARENESS_ALERT, EnemyAlertChannelMode.class) {
         @Command(descMethod = "help")
         @RolePermission(Roles.ADMIN)
         public String ENEMY_ALERT_CHANNEL_MODE(@Me GuildDB db, @Me User user, EnemyAlertChannelMode mode) {
@@ -648,7 +648,7 @@ public class GuildKey {
         }
     }.setupRequirements(f -> f.requires(ENEMY_ALERT_CHANNEL));
 
-    public static GuildSetting<KingdomFilter> ENEMY_ALERT_FILTER = new GuildSetting<KingdomFilter>(GuildSettingCategory.BEIGE_ALERTS, KingdomFilter.class) {
+    public static GuildSetting<KingdomFilter> ENEMY_ALERT_FILTER = new GuildSetting<KingdomFilter>(GuildSettingCategory.AWARENESS_ALERT, KingdomFilter.class) {
         @Command(descMethod = "help")
         @RolePermission(Roles.ADMIN)
         public String ENEMY_ALERT_FILTER(@Me GuildDB db, @Me User user, KingdomFilter filter) {
@@ -662,7 +662,7 @@ public class GuildKey {
 
         @Override
         public String help() {
-            return "A filter for enemies to alert on when they leave beige\n" +
+            return "A filter for enemies to alert on when they leave alert level\n" +
                     "Defaults to `#active_m<7200` (active in the past 5 days)";
         }
     }.setupRequirements(f -> f.requires(ENEMY_ALERT_CHANNEL));
