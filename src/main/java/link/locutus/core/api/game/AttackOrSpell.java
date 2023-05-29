@@ -13,6 +13,8 @@ public interface AttackOrSpell {
 
     int getDefender_aa();
 
+    long getDate();
+
     Map<MilitaryUnit, Long> getCost(boolean isAttacker);
 
     AttackOrSpellType getType();

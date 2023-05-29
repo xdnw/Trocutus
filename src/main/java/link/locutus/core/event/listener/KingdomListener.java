@@ -50,6 +50,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -149,7 +150,13 @@ public class KingdomListener {
         }
     }
 
+    private Map<Long, Long> pingAlerts = new HashMap<>();
+    private Map<Integer, Long> lastUpdateMap = new HashMap<>();
+
     private boolean enemyAlert(DBKingdom previous, DBKingdom current) {
+        long lastUpdateTime = lastUpdateMap.getOrDefault(current.getId(), 0L);
+        if (lastUpdateTime >= current.getLast_fetched()) return false;
+        lastUpdateMap.put(current.getId(), current.getLast_fetched());
         if (current.getActive_m() > 7200) return false;
 
 //        if (previous.getAlert_level() > current.getAlert_level() && previous.getSpell_alert() > current.getSpell_alert()) return false;
@@ -172,8 +179,8 @@ public class KingdomListener {
 
         String title = StringMan.join(changes, " | ");
 
-        double minScore = current.getScore() / 1.75;
-        double maxScore = current.getScore() / 0.75;
+        double minScore = current.getAttackMinRange();
+        double maxScore = current.getAttackMaxRange();
 
         AlertUtil.forEachChannel(GuildDB::isValidAlliance, GuildKey.ENEMY_ALERT_CHANNEL, new BiConsumer<MessageChannel, GuildDB>() {
             @Override
@@ -238,6 +245,10 @@ public class KingdomListener {
                         };
                         inRangeUsersWeaker.removeIf(userFilter);
                         inRangeUsersStronger.removeIf(userFilter);
+                        inRangeUsersStronger.removeIf(f -> pingAlerts.getOrDefault(f.getIdLong(), 0L) >= System.currentTimeMillis() - TimeUnit.SECONDS.toMillis(15));
+                        inRangeUsersWeaker.removeIf(f -> pingAlerts.getOrDefault(f.getIdLong(), 0L) >= System.currentTimeMillis() - TimeUnit.SECONDS.toMillis(15));
+                        pingAlerts.putAll(inRangeUsersStronger.stream().collect(Collectors.toMap(f -> f.getIdLong(), f -> System.currentTimeMillis())));
+                        pingAlerts.putAll(inRangeUsersWeaker.stream().collect(Collectors.toMap(f -> f.getIdLong(), f -> System.currentTimeMillis())));
 
                         if (!inRangeUsersStronger.isEmpty()) {
                             msg.append("Stronger: ");

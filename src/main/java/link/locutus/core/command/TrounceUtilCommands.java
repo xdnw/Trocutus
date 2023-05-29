@@ -30,8 +30,8 @@ public class TrounceUtilCommands {
     @Command
     public String score(int score) {
         return "Score: " + MathMan.format(score) + "\n" +
-                "WarRange: " + MathMan.format(score * 0.5) + "- " + MathMan.format(score * 1.5) + "\n" +
-                "Can be Attacked By: " + MathMan.format(score / 1.5) + "- " + MathMan.format(score / 0.5);
+                "WarRange: " + MathMan.format(TrounceUtil.getMinScoreRange(score, true)) + "- " + TrounceUtil.getMaxScoreRange(score, true) + "\n" +
+                "Can be Attacked By: " + MathMan.format(TrounceUtil.getMinScoreRange(score, false)) + "- " + TrounceUtil.getMaxScoreRange(score, false);
     }
 
     @Command(desc = "Get the cost of military units and their upkeep")
@@ -101,10 +101,22 @@ public class TrounceUtilCommands {
         StringBuilder response = new StringBuilder();
         response.append("Your Land: " + MathMan.format(my_score) + " | Your Attack: " + MathMan.format(my_attack) + "\n");
         response.append("Optimal fey targets:\n");
-        // both
         response.append("- land+gold: " + MathMan.format(optimalBothFey) + " land -> net $" + MathMan.format((long) optimalBothValue) + "\n");
         response.append("- land: " + MathMan.format(optimalLandFey) + " land -> net $" + MathMan.format((long) optimalLandValue) + "\n");
         response.append("- gold: " + MathMan.format(optimalGoldFey) + " land -> net $" + MathMan.format((long) optimalGoldValue) + "\n");
+        return response.toString();
+    }
+
+    @Command
+    public String fey_top(DBKingdom attacker) {
+        int my_score = attacker.getScore();
+        int maxScore = attacker.getAttackMaxRange();
+        double dpa = TrounceUtil.getFeyDPA(maxScore);
+        int defense = (int) (dpa * maxScore);
+        StringBuilder response = new StringBuilder();
+        response.append("Your Land: " + MathMan.format(my_score) + "\n");
+        response.append("Max Fey:\n");
+        response.append("- land: " + MathMan.format(maxScore) + " land -> " + MathMan.format(defense) + " defense\n");
         return response.toString();
     }
 

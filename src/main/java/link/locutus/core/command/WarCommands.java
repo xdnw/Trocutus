@@ -4,6 +4,7 @@ import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Default;
 import link.locutus.command.binding.annotation.Me;
 import link.locutus.command.binding.annotation.Switch;
+import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
@@ -11,6 +12,7 @@ import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.util.DiscordUtil;
+import link.locutus.util.TrounceUtil;
 
 import javax.swing.SwingContainer;
 import java.util.ArrayList;
@@ -23,7 +25,7 @@ import java.util.stream.Collectors;
 
 public class WarCommands {
     @Command
-    public String war(@Me GuildDB db, @Me Map<DBRealm, DBKingdom> me, int maxAttackAlert, int maxSpellAlert, @Default Set<DBKingdom> enemies, @Switch("n") @Default("15") int numResults, @Switch("s") boolean includeStronger) {
+    public String war(@Me GuildDB db, @Me Map<DBRealm, DBKingdom> me, int maxAttackAlert, int maxSpellAlert, @Default Set<DBKingdom> enemies, @Switch("n") @Default("15") int numResults, @Switch("s") boolean includeStronger, @Switch("w") boolean includeWarUnitEstimate) {
         if (enemies == null) {
             enemies = new HashSet<>();
             Set<Integer> enemyIds = db.getCoalition(Coalition.ENEMIES);
@@ -97,21 +99,8 @@ public class WarCommands {
         for (int i = 0; i < numResults; i++) {
             Map.Entry<DBKingdom, Integer> result = enemyStrength.get(i);
             DBKingdom kingdom = result.getKey();
-            DBSpy spy = spyReport.get(kingdom);
-            response.append("__**" + kingdom.getName() + " | " + kingdom.getAllianceName() + ":**__ " + kingdom.getTotal_land() + " ns\n");
-            response.append("<" + kingdom.getUrl(myKingdom.getSlug()) + "> ");
-            if (spy != null) {
-                response.append("Spied: " + DiscordUtil.timestamp(spy.date, "R") + " | ");
-            }
-            response.append("Active: " + DiscordUtil.timestamp(kingdom.getLast_active(), "R") + "\n");
-            if (spy != null) {
-                response.append("$" + spy.gold + " (total) | $" + spy.protectedGold + " (protected)\n");
-                response.append("Attack Str: " + spy.attack + " | Defense Str: " + spy.defense + "\n");
-                response.append("```" + spy.getUnitMarkdown() + "``` ");
-            } else {
-                response.append("`no spy data`");
-            }
-            response.append("Resource: `" + kingdom.getResource_level() + "` | Alert: `" + kingdom.getAlert_level() + "` Spell: `" + kingdom.getSpell_alert() + "`\n\n");
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), includeWarUnitEstimate));
+            response.append("\n\n");
         }
         if (errors.length() > 0) {
             response.append("\n\nErrors:\n" + errors);

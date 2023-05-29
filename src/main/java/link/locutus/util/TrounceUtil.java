@@ -2,20 +2,33 @@ package link.locutus.util;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
+import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.MilitaryUnit;
+import link.locutus.core.db.TrouncedDB;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.spells.DBSpy;
+import link.locutus.core.db.entities.war.DBAttack;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.lang.reflect.Type;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class TrounceUtil {
     public static String getAlert(Document dom) {
@@ -54,7 +67,7 @@ public class TrounceUtil {
     }
 
     public static int getMaxScoreRange(int score, boolean declare) {
-        return (int) (score * 1.5);
+        return (int) (score * 2);
     }
 
     public static int getMinScoreRange(int score, boolean declare) {
@@ -274,5 +287,254 @@ public class TrounceUtil {
             }
         }
         return result;
+    }
+
+    public static void test() {
+        DBKingdom me = DBKingdom.parse("locutus");
+        DBAttack myAttack = me.getLatestOffensive();
+        Map<MilitaryUnit, Long> attackerLosses = myAttack.getCost(true);
+        Map<MilitaryUnit, Long> defenderLosses = myAttack.getCost(false);
+        System.out.println("Attacker losses2: " + attackerLosses);
+        System.out.println("Defender losses2: " + defenderLosses);
+        DBKingdom attacker = myAttack.getAttacker();
+        DBKingdom defender = myAttack.getDefender();
+
+        System.out.println("Attacker " + attacker.getName() + " | " + attacker.getHero());
+        System.out.println("Defender " + defender.getName() + " | " + defender.getHero());
+
+        Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> strength = MilitaryUnit.getUnits(attackerLosses, defenderLosses, attacker.getHero(), defender.getHero(), true, true);
+        System.out.println("Attacker strength " + TrounceUtil.resourcesToString(strength.getKey()));
+        System.out.println("Defender strength " + TrounceUtil.resourcesToString(strength.getValue()));
+//        System.out.println("Defender strength 2 " + MilitaryUnit.getOpponentStrength(attackerLosses, false, HeroType.MAGICIAN));
+
+//        Map<MilitaryUnit, Long> attUnits = MilitaryUnit.getMyUnits(myAttack.getAttacker().getHero(), myAttack.getDefender().getHero(), attackerLosses, defenderLosses, true);
+//        Map<MilitaryUnit, Long> defUnits = MilitaryUnit.getMyUnits(myAttack.getDefender().getHero(), myAttack.getAttacker().getHero(), defenderLosses, attackerLosses, false);
+//        System.out.println("Att units: " + attUnits);
+//        System.out.println("Att Attack " + MilitaryUnit.getAttack(attUnits, me.getHero()));
+//        System.out.println("Att Defense " + MilitaryUnit.getDefense(attUnits, me.getHero()));
+//        System.out.println("Def units: " + defUnits);
+//        System.out.println("Def Attack " + MilitaryUnit.getAttack(defUnits, me.getHero()));
+//        System.out.println("Def Defense " + MilitaryUnit.getDefense(defUnits, me.getHero()));
+    }
+
+    public static void test2() throws SQLException {
+        int attAtt = 246008;
+        int attDef = 192069;
+
+        int defAtt = 88689;
+        int defDef = 105038;
+
+        int attSoldier = 160944;
+        int attCavalry = 315;
+        int attArcher = 1166;
+        int attElite = 2673;
+
+        int defSoldier = 44134;
+        int defCavalry = 4;
+        int defArcher = 1153;
+        int defElite = 6869;
+
+        int attSoldierLoss = 3533; // 2.1951734764887165722238791132319
+        int attCavalryLoss = 6; // 1.746031746031746031746031746032 - 2.063492063492063492063492063492
+        int attArcherLoss = 20; // 1.672384219554030874785591766724 - 1.758147512864493996569468267581
+        int attEliteLoss = 53; // 1.964085297418630751964085297419 - 2.0014964459408903853348297792742
+
+        int defSoldierLoss = 5946;
+        int defCavalryLoss = 0;
+        int defArcherLoss = 143;
+        int defEliteLoss = 657;
+
+        TrouncedDB db = new TrouncedDB("trounced2");
+        System.out.println("Loaded db");
+        Set<DBKingdom> kingdoms = db.getKingdomsMatching(f -> f.getHero() == HeroType.AUTOMATOR);
+        Set<Integer> kingdomIds = kingdoms.stream().map(DBKingdom::getId).collect(Collectors.toSet());
+
+        List<DBAttack> allAttacks = db.getAttacks(f -> kingdomIds.contains(f.getDefender_id()));
+
+        Map<DBKingdom, Set<DBAttack>> attacksByDefender = new HashMap<>();
+        for (DBAttack attack : allAttacks) {
+            attacksByDefender.computeIfAbsent(attack.getDefender(), k -> new HashSet<>()).add(attack);
+        }
+
+        System.out.println("num kindgoms " + kingdoms.size());
+        System.out.println("num attacks " + allAttacks.size());
+        // atacker or defender in kingdom ids
+        List<DBSpy> allspies = db.getSpiesMatching(f -> kingdomIds.contains(f.getAttacker_id()) || kingdomIds.contains(f.getDefender_id()));
+        System.out.println("Spy ops " + allspies.size());
+        Map<DBKingdom, Set<DBSpy>> spiesByKingdom = new HashMap<>();
+        for (DBSpy spy : allspies) {
+            spiesByKingdom.computeIfAbsent(spy.getAttacker(), k -> new HashSet<>()).add(spy);
+            spiesByKingdom.computeIfAbsent(spy.getDefender(), k -> new HashSet<>()).add(spy);
+        }
+
+        Map<DBAttack, DBSpy> defSpyOps = new HashMap<>();
+        Map<DBAttack, DBSpy> attSpyOps = new HashMap<>();
+
+        for (Map.Entry<DBKingdom, Set<DBAttack>> entry : attacksByDefender.entrySet()) {
+            DBKingdom defender = entry.getKey();
+            Set<DBAttack> attacks = entry.getValue();
+            Set<DBSpy> spies = spiesByKingdom.get(defender);
+            if (spies == null) continue;
+            System.out.println("Found spies " + spies.size());
+            for (DBAttack attack : attacks) {
+                for (DBSpy spy : spies) {
+                    // if within 3m of each other
+                    if (Math.abs(spy.date - attack.date) < TimeUnit.MINUTES.toMillis(5)) {
+                        if (spy.getAttacker().equals(defender)) {
+                            attSpyOps.put(attack, spy);
+                        } else {
+                            defSpyOps.put(attack, spy);
+                        }
+                    }
+                }
+            }
+        }
+
+        System.out.println("att spy " + attSpyOps.size());
+        System.out.println("def spy " + defSpyOps.size());
+        Map<MilitaryUnit, List<Double>> factorsByUnit = new HashMap<>();
+
+//        if (false)
+//        for (Map.Entry<DBAttack, DBSpy> entry : defSpyOps.entrySet())
+//        {
+//            DBAttack attack = entry.getKey();
+//            DBKingdom attacker = attack.getAttacker();
+//            if (attacker == null) continue;
+//            DBSpy attSpyInfo = attSpyOps.get(attack);
+//            if (attSpyInfo == null) continue;
+//            DBSpy defSpyInfo = entry.getValue();
+//            HeroType attHero = attack.getAttacker().getHero();
+//            HeroType defHero = attack.getDefender().getHero();
+//
+//
+//            int defenderDefense = defSpyInfo.defense;
+//            int attackerAttack = attSpyInfo.attack;
+//
+//            // Soldier
+//            {
+//                int soldierAttack = attSpyInfo.soldiers;
+//                if (soldierAttack < 100 || attack.attacker_soldiers < 10) continue;
+//                double percentAttackIsSoldiers = (double) soldierAttack / (double) attackerAttack;
+//                int soldierLosses = attack.attacker_soldiers;
+//                double factor = (double) soldierLosses / (percentAttackIsSoldiers * defenderDefense);
+//                factorsByUnit.computeIfAbsent(MilitaryUnit.SOLDIER, k -> new ArrayList<>()).add(factor);
+//            }
+//
+//            // Cavalry
+//            {
+//                int cavalryAttack = attSpyInfo.cavalry;
+//                if (cavalryAttack < 100 || attack.attacker_cavalry < 10) continue;
+//                double percentAttackIsCavalry = (double) cavalryAttack / (double) attackerAttack;
+//                int cavalryLosses = attack.attacker_cavalry;
+//                double factor = (double) cavalryLosses / (percentAttackIsCavalry * defenderDefense);
+//                factorsByUnit.computeIfAbsent(MilitaryUnit.CAVALRY, k -> new ArrayList<>()).add(factor);
+//            }
+//            // archer
+//            {
+//                int archerAttack = attSpyInfo.archers;
+//                if (archerAttack < 100 || attack.attacker_archers < 10) continue;
+//                double percentAttackIsArcher = (double) archerAttack / (double) attackerAttack;
+//                int archerLosses = attack.attacker_archers;
+//                double factor = (double) archerLosses / (percentAttackIsArcher * defenderDefense);
+//                factorsByUnit.computeIfAbsent(MilitaryUnit.ARCHER, k -> new ArrayList<>()).add(factor);
+//            }
+//            // elite
+//            {
+//                int eliteAttack = attSpyInfo.elites;
+//                if (eliteAttack < 100 || attack.attacker_elites < 10) continue;
+//                double percentAttackIsElite = (double) eliteAttack / (double) attackerAttack;
+//                int eliteLosses = attack.attacker_elites;
+//                double factor = (double) eliteLosses / (percentAttackIsElite * defenderDefense);
+//                factorsByUnit.computeIfAbsent(MilitaryUnit.ELITE, k -> new ArrayList<>()).add(factor);
+//            }
+//        }
+
+        for (Map.Entry<DBAttack, DBSpy> entry : defSpyOps.entrySet()) {
+            DBAttack attack = entry.getKey();
+            DBKingdom attacker = attack.getAttacker();
+            if (attacker == null) continue;
+            DBSpy attSpyInfo = attSpyOps.get(attack);
+            if (attSpyInfo == null) continue;
+            DBSpy defSpyInfo = entry.getValue();
+            HeroType attHero = attack.getAttacker().getHero();
+            HeroType defHero = attack.getDefender().getHero();
+
+
+            int defenderDefense = defSpyInfo.defense;
+            int attackerAttack = attSpyInfo.attack;
+
+            // Soldier Defense
+            {
+                int soldierDefence = defSpyInfo.soldiers;
+                if (soldierDefence < 100 || attack.defender_soldiers < 10) continue;
+                int attackerUnits = attSpyInfo.soldiers + attSpyInfo.cavalry + attSpyInfo.archers + attSpyInfo.elites;
+                int defenderUnits = defSpyInfo.soldiers + defSpyInfo.cavalry + defSpyInfo.archers + defSpyInfo.elites;
+                double percentDefenseIsSoldiers = (double) soldierDefence / (double) defenderDefense;
+                int soldierLosses = attack.defender_soldiers;
+                double factor = (double) soldierLosses / (percentDefenseIsSoldiers * attackerAttack);
+                factorsByUnit.computeIfAbsent(MilitaryUnit.SOLDIER, k -> new ArrayList<>()).add(factor);
+            }
+
+            // Cavalry Defense
+            {
+                // Elite units have -20% casualties.
+                int cavalryDefence = defSpyInfo.cavalry;
+                if (cavalryDefence < 100 || attack.defender_cavalry < 10) continue;
+                double percentDefenseIsCavalry = (double) cavalryDefence / (double) defenderDefense;
+                int cavalryLosses = attack.defender_cavalry;
+                double factor = (double) cavalryLosses / (percentDefenseIsCavalry * attackerAttack);
+                factorsByUnit.computeIfAbsent(MilitaryUnit.CAVALRY, k -> new ArrayList<>()).add(factor);
+            }
+
+            // Archer Defense
+            {
+                int archerDefence = defSpyInfo.archers;
+                if (archerDefence < 100 || attack.defender_archers < 10) continue;
+                double percentDefenseIsArcher = (double) archerDefence / (double) defenderDefense;
+                int archerLosses = attack.defender_archers;
+                double factor = (double) archerLosses / (percentDefenseIsArcher * attackerAttack);
+                factorsByUnit.computeIfAbsent(MilitaryUnit.ARCHER, k -> new ArrayList<>()).add(factor);
+            }
+
+            // elite defense
+            {
+                int eliteDefence = defSpyInfo.elites;
+                if (eliteDefence < 100 || attack.defender_elites < 10) continue;
+                double percentDefenseIsElite = (double) eliteDefence / (double) defenderDefense;
+                int eliteLosses = attack.defender_elites;
+                double factor = (double) eliteLosses / (percentDefenseIsElite * attackerAttack);
+                factorsByUnit.computeIfAbsent(MilitaryUnit.ELITE, k -> new ArrayList<>()).add(factor);
+            }
+        }
+
+        for (Map.Entry<MilitaryUnit, List<Double>> entry : factorsByUnit.entrySet()) {
+            MilitaryUnit unit = entry.getKey();
+            List<Double> factors = entry.getValue();
+            // sort
+            factors.sort(Comparator.naturalOrder());
+            // remove infinity and <= 0
+            factors = factors.stream().filter(f -> f > 0 && !Double.isInfinite(f)).collect(Collectors.toList());
+            // remove when more than 50% from average
+            double avg = factors.stream().mapToDouble(f -> f).average().getAsDouble();
+            List<Double> filteredFactors = factors;//.stream().filter(f -> Math.abs(f - avg) < 0.5 * avg).collect(Collectors.toList());
+
+            // remove outliers from factors
+//            double avg = factors.stream().mapToDouble(f -> f).average().getAsDouble();
+//            double stdDev = Math.sqrt(factors.stream().mapToDouble(f -> Math.pow(f - avg, 2)).sum() / factors.size());
+//            List<Double> filteredFactors = factors.stream().filter(f -> Math.abs(f - avg) < 2 * stdDev).collect(Collectors.toList());
+
+
+            double sum = filteredFactors.stream().mapToDouble(f -> f).sum();
+            double newAvg = sum / filteredFactors.size();
+            System.out.println("# " + unit + " | " + newAvg);
+            for (double factor : filteredFactors) {
+                System.out.println(factor);
+            }
+            System.out.println("\n\n");
+        }
+
+
+        // get spy ops
+
     }
 }

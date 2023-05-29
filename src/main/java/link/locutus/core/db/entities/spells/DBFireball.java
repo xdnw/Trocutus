@@ -3,6 +3,7 @@ package link.locutus.core.db.entities.spells;
 import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.AttackOrSpellType;
 import link.locutus.core.api.game.MilitaryUnit;
+import link.locutus.core.api.pojo.pages.FireballInteraction;
 import link.locutus.core.api.pojo.pages.SpyInteraction;
 import link.locutus.core.db.entities.AbstractAttackOrSpell;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
@@ -11,38 +12,26 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class DBSpy extends AbstractAttackOrSpell {
-    public final int protectedGold;
-    public final int gold;
-    public final int attack;
-    public final int defense;
-    public final int soldiers;
+public class DBFireball extends AbstractAttackOrSpell {
     public final int cavalry;
     public final int archers;
+    public final int soldiers;
     public final int elites;
 
-    public DBSpy(int id, int attackerId, int attackerAa, int protectedGold, int gold, int attack, int defense, int soldiers, int cavalry, int archers, int elites, int defenderId, int defenderAa, long date) {
-        super(AttackOrSpellType.SPY, id, attackerId, attackerAa, defenderId, defenderAa, date);
-        this.protectedGold = protectedGold;
-        this.gold = gold;
-        this.attack = attack;
-        this.defense = defense;
+    public DBFireball(int id, int attackerId, int attackerAa, int soldiers, int cavalry, int archers, int elites, int defenderId, int defenderAa, long date) {
+        super(AttackOrSpellType.FIREBALL, id, attackerId, attackerAa, defenderId, defenderAa, date);
         this.soldiers = soldiers;
         this.cavalry = cavalry;
         this.archers = archers;
         this.elites = elites;
     }
 
-    public DBSpy(SpyInteraction.Spy pojo) {
-        super(AttackOrSpellType.SPY, pojo.id, pojo.attacker.id, pojo.attacker_alliance == null ? 0 : pojo.attacker_alliance.id, pojo.defender.id, pojo.defender_alliance == null ? 0 : pojo.defender_alliance.id, pojo.created_at.getTime());
-        this.protectedGold = pojo.data.protectedGold;
-        this.gold = pojo.data.gold;
-        this.attack = pojo.data.attack;
-        this.defense = pojo.data.defense;
-        this.soldiers = pojo.data.soldiers;
-        this.cavalry = pojo.data.cavalry;
-        this.archers = pojo.data.archers;
-        this.elites = pojo.data.elites;
+    public DBFireball(FireballInteraction.Fireball pojo) {
+        super(AttackOrSpellType.FIREBALL, pojo.id, pojo.attacker.id, pojo.attacker_alliance == null ? 0 : pojo.attacker_alliance.id, pojo.defender.id, pojo.defender_alliance == null ? 0 : pojo.defender_alliance.id, pojo.created_at.getTime());
+        this.soldiers = pojo.data.casualties.soldiers;
+        this.cavalry = pojo.data.casualties.cavalry;
+        this.archers = pojo.data.casualties.archers;
+        this.elites = pojo.data.casualties.elites;
     }
 
 
@@ -59,5 +48,16 @@ public class DBSpy extends AbstractAttackOrSpell {
                 .append(String.format("%5s", archers)).append(" " + cavalryChar).append(" | ")
                 .append(String.format("%4s", elites)).append(" " + eliteChar);
         return body.toString();
+    }
+
+    @Override
+    public Map<MilitaryUnit, Long> getCost(boolean isAttacker) {
+        Map<MilitaryUnit, Long> result = super.getCost(isAttacker);
+        if (isAttacker) return result;
+        result.put(MilitaryUnit.SOLDIER, (long) soldiers);
+        result.put(MilitaryUnit.CAVALRY, (long) cavalry);
+        result.put(MilitaryUnit.ARCHER, (long) archers);
+        result.put(MilitaryUnit.ELITE, (long) elites);
+        return result;
     }
 }

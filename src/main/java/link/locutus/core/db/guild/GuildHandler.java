@@ -4,6 +4,8 @@ import com.google.common.eventbus.Subscribe;
 import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.impl.discord.DiscordChannelIO;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.api.game.HeroType;
+import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.spells.DBSpy;
@@ -20,6 +22,7 @@ import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 
+import java.util.Map;
 import java.util.function.Function;
 
 public class GuildHandler {
@@ -91,10 +94,35 @@ public class GuildHandler {
                 .append(String.format("%5s", attack.defender_archers)).append(" " + cavalryChar).append(" | ")
                 .append(String.format("%4s", attack.defender_elites)).append(" " + eliteChar)
                 .append("```\n");
+
+        body.append("## Total Units (estimate)\n");
+        HeroType attHero = attack.getAttacker() == null ? HeroType.VISIONARY : attack.getAttacker().getHero();
+        HeroType defHero = attack.getDefender() == null ? HeroType.VISIONARY : attack.getDefender().getHero();
+        Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> units = MilitaryUnit.getUnits(attack.getCost(true), attack.getCost(false), attHero, defHero, true, true);
+        Map<MilitaryUnit, Long> attUnits = units.getKey();
+        Map<MilitaryUnit, Long> defUnits = units.getValue();
+        int attAttack = MilitaryUnit.getAttack(attUnits, attHero);
+        int attDefense = MilitaryUnit.getDefense(attUnits, attHero);
+        int defAttack = MilitaryUnit.getAttack(defUnits, defHero);
+        int defDefense = MilitaryUnit.getDefense(defUnits, defHero);
+        body.append("**attacker** (attack: " + attAttack + " | defense:" + attDefense + ")\n```");
+        body.append(String.format("%6s", attUnits.getOrDefault(MilitaryUnit.SOLDIER, 0L))).append(" " + soldierChar).append(" | ")
+                .append(String.format("%5s", attUnits.getOrDefault(MilitaryUnit.CAVALRY, 0L))).append(" " + archerChar).append(" | ")
+                .append(String.format("%5s", attUnits.getOrDefault(MilitaryUnit.ARCHER, 0L))).append(" " + cavalryChar).append(" | ")
+                .append(String.format("%4s", attUnits.getOrDefault(MilitaryUnit.ELITE, 0L))).append(" " + eliteChar)
+                .append("```\n");
+        body.append("**attacker** (attack: " + defAttack + " | defense:" + defDefense + ")\n```");
+        body.append(String.format("%6s", defUnits.getOrDefault(MilitaryUnit.SOLDIER, 0L))).append(" " + soldierChar).append(" | ")
+                .append(String.format("%5s", defUnits.getOrDefault(MilitaryUnit.CAVALRY, 0L))).append(" " + archerChar).append(" | ")
+                .append(String.format("%5s", defUnits.getOrDefault(MilitaryUnit.ARCHER, 0L))).append(" " + cavalryChar).append(" | ")
+                .append(String.format("%4s", defUnits.getOrDefault(MilitaryUnit.ELITE, 0L))).append(" " + eliteChar)
+                .append("```\n");
+
         body.append("**loot**: $" + MathMan.format(attack.goldLoot) + " | " + MathMan.format(attack.acreLoot) + " acres\n");
         body.append("**acre loss**: " + MathMan.format(attack.defenderAcreLoss) + " acres\n");
         body.append("**hero exp**: " + MathMan.format(attack.atkHeroExp) + "(attacker) | " + MathMan.format(attack.defHeroExp) + " (defender)\n");
         body.append("**date**: " + DiscordUtil.timestamp(attack.date, "R") + "\n");
+
 
         if (defender == null || defender.getPosition().ordinal() <= Rank.APPLICANT.ordinal() && defender.getActive_m() > 1440) {
             checkPingMilcom = false;

@@ -246,6 +246,7 @@ public class CommandManager extends ListenerAdapter {
 
         this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_optimal", "optimal");
         this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_land", "land");
+        this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_top", "top");
 
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "sync", "kingdom");
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncInteractions", "interactions");

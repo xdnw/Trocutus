@@ -1,5 +1,7 @@
 package link.locutus.core.db;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.api.client.util.Base64;
 import com.ptsmods.mysqlw.query.QueryCondition;
 import com.ptsmods.mysqlw.query.builder.SelectBuilder;
@@ -19,11 +21,13 @@ import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.TreatyType;
 import link.locutus.core.api.pojo.Api;
+import link.locutus.core.api.pojo.pages.FireballInteraction;
 import link.locutus.core.db.entities.alliance.AllianceChange;
 import link.locutus.core.db.entities.alliance.AllianceMeta;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.KingdomMeta;
 import link.locutus.core.db.entities.kingdom.KingdomOrAlliance;
+import link.locutus.core.db.entities.spells.DBFireball;
 import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -40,6 +44,7 @@ import link.locutus.core.event.kingdom.KingdomUpdateEvent;
 import link.locutus.core.event.realm.RealmCreateEvent;
 import link.locutus.core.event.realm.RealmDeleteEvent;
 import link.locutus.core.event.realm.RealmUpdateEvent;
+import link.locutus.core.event.spy.SpellCreateEvent;
 import link.locutus.core.event.spy.SpyCreateEvent;
 import link.locutus.core.event.treaty.TreatyCancelEvent;
 import link.locutus.core.event.treaty.TreatyCreateEvent;
@@ -87,6 +92,8 @@ public class TrouncedDB extends DBMain {
 
     private Map<Integer, DBAttack> allAttacks = new Int2ObjectOpenHashMap<>();
 
+    private Map<Integer, AttackOrSpell> allSpells = new Int2ObjectOpenHashMap<>();
+
     private Map<Integer, DBSpy> allSpies = new Int2ObjectOpenHashMap<>();
 
     private Set<Integer> unknownInteractionIds = new IntArraySet();
@@ -94,7 +101,11 @@ public class TrouncedDB extends DBMain {
     private Map<Long, Auth> authCache = new ConcurrentHashMap<>();
 
     public TrouncedDB() throws SQLException {
-        super("trounced");
+        this("trounced");
+    }
+
+    public TrouncedDB(String name) throws SQLException {
+        super(name);
         init();
     }
 
@@ -115,6 +126,41 @@ public class TrouncedDB extends DBMain {
         loadSpies();
 
         loadUnkownIds();
+
+        // dleete from db where these columns are 0
+        // "protected_gold, " +
+        //                "gold_loot, " +
+        //                "attack, " +
+        //                "defense, " +
+        //                "soldiers, " +
+
+//        executeStmt("DELETE FROM SPY_OPS WHERE protected_gold = 0 AND gold_loot = 0 AND attack = 0 AND defense = 0");
+        //delete where id in fireballs table
+        executeStmt("DELETE FROM SPY_OPS WHERE id IN (SELECT id FROM FIREBALLS)");
+
+        importFireballs();
+    }
+
+    public void importFireballs() {
+        ObjectMapper mapper = new ObjectMapper();
+        List<DBFireball> fireballs = new ArrayList<>();
+        SelectBuilder builder = getDb().selectBuilder("INTERACTIONS")
+                .select("*");
+        // contains string `"type":"fireball"`
+        builder.where(QueryCondition.like("data", "%\"type\":\"fireball\"%"));
+        try (ResultSet rs = builder.executeRaw()) {
+            while (rs.next()) {
+               int id = rs.getInt("id");
+               String data = rs.getString("data");
+                FireballInteraction.Fireball pojo = mapper.readValue(data, FireballInteraction.Fireball.class);
+                DBFireball spell = new DBFireball(pojo);
+                fireballs.add(spell);
+            }
+        } catch (SQLException | JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println("Save fireballs " + fireballs.size());
+        saveFireballs(fireballs);
     }
 
     public void deleteApiKey(String key) {
@@ -215,6 +261,31 @@ public class TrouncedDB extends DBMain {
 
                 DBSpy spy = new DBSpy(id, attackerId, attackerAa, protectedGold, goldLoot, attack, defense, soldiers, cavalry, archers, elites, defenderId, defenderAa, date);
                 allSpies.put(id, spy);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println("Spies " + allSpies.size());
+    }
+
+    public void loadFireballs() {
+        SelectBuilder builder = getDb().selectBuilder("FIREBALLS")
+                .select("*");
+        try (ResultSet rs = builder.executeRaw()) {
+            while (rs.next()) {
+                int id = rs.getInt("id");
+                int attackerAa = rs.getInt("attacker_aa");
+                int attackerId = rs.getInt("attacker_id");
+                int soldiers = rs.getInt("soldiers");
+                int cavalry = rs.getInt("cavalry");
+                int archers = rs.getInt("archers");
+                int elites = rs.getInt("elites");
+                int defenderAa = rs.getInt("defender_aa");
+                int defenderId = rs.getInt("defender_id");
+                long date = rs.getLong("date");
+
+                DBFireball spell = new DBFireball(id, attackerId, attackerAa, soldiers, cavalry, archers, elites, defenderId, defenderAa, date);
+                allSpells.put(id, spell);
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -445,6 +516,20 @@ public class TrouncedDB extends DBMain {
                 .putColumn("gold_loot", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("attack", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("defense", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("soldiers", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("cavalry", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("archers", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("elites", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("defender_aa", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("defender_id", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("date", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .create(getDb());
+
+        // fireballs
+        TablePreset.create("FIREBALLS")
+                .putColumn("id", ColumnType.BIGINT.struct().setNullAllowed(false).setPrimary(true).configure(f -> f.apply(null)))
+                .putColumn("attacker_aa", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("attacker_id", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("soldiers", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("cavalry", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("archers", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
@@ -775,6 +860,67 @@ public class TrouncedDB extends DBMain {
         return result;
     }
 
+    private final ThrowingBiConsumer<DBFireball, PreparedStatement> setFireball = new ThrowingBiConsumer<DBFireball, PreparedStatement>() {
+        @Override
+        public void acceptThrows(DBFireball attack, PreparedStatement stmt) throws Exception {
+            stmt.setInt(1, attack.id);
+            stmt.setInt(2, attack.attacker_id);
+            stmt.setInt(3, attack.attacker_aa);
+            stmt.setInt(4, attack.soldiers);
+            stmt.setInt(5, attack.cavalry);
+            stmt.setInt(6, attack.archers);
+            stmt.setInt(7, attack.elites);
+            stmt.setInt(8, attack.defender_id);
+            stmt.setInt(9, attack.defender_aa);
+            stmt.setLong(10, attack.date);
+        }
+    };
+
+    public int[] saveFireballs(Collection<DBFireball> toSave) {
+        return saveFireballs(toSave, true);
+    }
+
+    public int[] saveFireballs(Collection<DBFireball> toSave, boolean runEvents) {
+        if (toSave.isEmpty()) return new int[0];
+        Set<Event> events = new HashSet<>();
+        List<DBFireball> toSaveFinal = new ArrayList<>();
+        for (DBFireball spell : toSave) {
+            AttackOrSpell existing = allSpells.put(spell.id, spell);
+            if (existing != null) continue;
+
+            toSaveFinal.add(spell);
+        }
+        int[] result;
+        String query = "INSERT OR IGNORE INTO FIREBALLS (id, " +
+                "attacker_id, " +
+                "attacker_aa, " +
+                "soldiers, " +
+                "cavalry, " +
+                "archers, " +
+                "elites, " +
+                "defender_id, " +
+                "defender_aa, " +
+                "date) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        if (toSaveFinal.size() == 1) {
+            DBFireball spell = toSaveFinal.iterator().next();
+            result = new int[]{update(query, stmt -> setFireball.accept(spell, stmt))};
+        } else {
+            result = executeBatch(toSaveFinal, query, setFireball);
+        }
+        for (int i = 0; i < result.length; i++) {
+            DBFireball spell = toSaveFinal.get(i);
+            boolean modified = result[i] > 0;
+            if (modified && runEvents) {
+                events.add(new SpellCreateEvent(spell));
+            }
+        }
+        if (!events.isEmpty()) {
+            Trocutus.imp().runEvents(events);
+        }
+        return result;
+    }
+
     // setUnknown
         private final ThrowingBiConsumer<Map.Entry<Integer, String>, PreparedStatement> setUnknown = new ThrowingBiConsumer<Map.Entry<Integer, String>, PreparedStatement>() {
         @Override
@@ -1057,6 +1203,10 @@ public class TrouncedDB extends DBMain {
         }
     };
     public int[] saveKingdoms(List<DBKingdom> toSave) {
+        if (toSave.stream().anyMatch(f -> f.getSlug().equalsIgnoreCase("vargstad"))) {
+            System.out.println("saving vargstad");
+            new Exception().printStackTrace();
+        }
         int[] result;
         String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -1191,7 +1341,7 @@ public class TrouncedDB extends DBMain {
     public DBAttack getLatestDefensive(int id) {
         DBAttack latest = null;
         for (DBAttack spy : allAttacks.values()) {
-            if (spy.defender_id == id && (latest == null || spy.id > latest.id)) {
+            if (spy.defender_id == id && (latest == null || spy.date > latest.date)) {
                 latest = spy;
             }
         }
@@ -1201,7 +1351,17 @@ public class TrouncedDB extends DBMain {
     public DBAttack getLatestOffensive(int id) {
         DBAttack latest = null;
         for (DBAttack spy : allAttacks.values()) {
-            if (spy.attacker_id == id && (latest == null || spy.id > latest.id)) {
+            if (spy.attacker_id == id && (latest == null || spy.date > latest.date)) {
+                latest = spy;
+            }
+        }
+        return latest;
+    }
+
+    public DBAttack getLatestAttack(int id) {
+        DBAttack latest = null;
+        for (DBAttack spy : allAttacks.values()) {
+            if ((spy.attacker_id == id || spy.defender_id == id) && (latest == null || spy.date > latest.date)) {
                 latest = spy;
             }
         }
@@ -1216,6 +1376,10 @@ public class TrouncedDB extends DBMain {
 
     public Map<Integer, DBTreaty> getTreaties(int realm, int allianceId) {
         return treatiesByAlliance.getOrDefault(realm, Collections.emptyMap()).getOrDefault(allianceId, Collections.emptyMap());
+    }
+
+    public List<DBSpy> getSpiesMatching(Predicate<DBSpy> filter) {
+        return allSpies.values().stream().filter(filter).collect(Collectors.toList());
     }
 
     public List<DBSpy> getDefensiveSpies(int id) {
@@ -1577,6 +1741,22 @@ public class TrouncedDB extends DBMain {
                 result.add(attack);
             }
         }
+        for (AttackOrSpell spell : allSpells.values()) {
+            if (spell.getDate() < start || spell.getDate() > end) continue;
+            if (isCol1Att.test(spell) && isCol2Def.test(spell)) {
+                result.add(spell);
+            } else if (isCol2Att.test(spell) && isCol1Def.test(spell)) {
+                result.add(spell);
+            }
+        }
+//        for (AttackOrSpell spell : allSpies.values()) {
+//            if (spell.getDate() < start || spell.getDate() > end) continue;
+//            if (isCol1Att.test(spell) && isCol2Def.test(spell)) {
+//                result.add(spell);
+//            } else if (isCol2Att.test(spell) && isCol1Def.test(spell)) {
+//                result.add(spell);
+//            }
+//        }
         return result;
     }
 

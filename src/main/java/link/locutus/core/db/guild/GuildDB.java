@@ -651,6 +651,7 @@ public class GuildDB extends DBMain implements KingdomOrAllianceOrGuild {
     public Function<DBKingdom, Boolean> getCanRaid(int topX, boolean checkTreaties) {
         Set<Integer> dnr = new HashSet<>(getCoalition(Coalition.ALLIES));
         dnr.addAll(getCoalition("dnr"));
+        dnr.addAll(getAllianceIds());
         Set<Integer> dnr_active = new HashSet<>(getCoalition("dnr_active"));
         Set<Integer> dnr_member = new HashSet<>(getCoalition("dnr_member"));
         Set<Integer> can_raid = new HashSet<>(getCoalition(Coalition.CAN_RAID));

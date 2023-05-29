@@ -7,8 +7,10 @@ import link.locutus.command.binding.ValueStore;
 import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.command.CommandResult;
 import link.locutus.command.command.StringMessageIO;
+import link.locutus.core.api.ScrapeKingdomUpdater;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
+import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.game.ResourceLevel;
 import link.locutus.core.api.pojo.pages.AllianceMembers;
 import link.locutus.core.db.entities.Activity;
@@ -36,6 +38,7 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -617,24 +620,16 @@ public class DBKingdom implements KingdomOrAlliance {
 
     @Command
     public int getAttackStrength() {
-        try {
-            AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
-            if (strength != null) return strength.stats.attack;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
+        if (strength != null) return strength.stats.attack;
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.attack;
     }
 
     @Command
     public int getDefenseStrength() {
-        try {
-            AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
-            if (strength != null) return strength.stats.defense;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
+        if (strength != null) return strength.stats.defense;
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.defense;
     }
@@ -847,4 +842,104 @@ public class DBKingdom implements KingdomOrAlliance {
         return getPosition().ordinal();
     }
 
+    public DBAttack getLatestAttack() {
+        return Trocutus.imp().getDB().getLatestAttack(id);
+    }
+
+    public String getInfoRowMarkdown(String slug, boolean calculateUnitsFromAttacks) {
+        return getInfoRowMarkdown(slug, calculateUnitsFromAttacks, true, true);
+    }
+    public String getInfoRowMarkdown(String slug, boolean calculateUnitsFromAttacks, boolean title, boolean alert) {
+        DBKingdom.HoldingInfo info = getHoldings(calculateUnitsFromAttacks);
+        StringBuilder response = new StringBuilder();
+        if (title) {
+            response.append("__**" + getName() + " | " + getAllianceName() + ":**__ " + getTotal_land() + " ns\n");
+            response.append("<" + getUrl(slug) + "> ");
+        }
+        if (info != null) {
+            if (info.dateGold() > 0) {
+                response.append("Spied: " + DiscordUtil.timestamp(info.dateGold(), "R") + " | ");
+            }
+            if (info.dateUnits() > 0 && info.dateUnits() > info.dateGold()) {
+                response.append("War Estimate: " + DiscordUtil.timestamp(info.dateUnits(), "R") + " | ");
+            }
+            response.append("Active: " + DiscordUtil.timestamp(getLast_active(), "R") + "\n");
+
+            if (info.units().containsKey(MilitaryUnit.GOLD)) {
+                long gold = info.units().get(MilitaryUnit.GOLD);
+                long protectedGold = getProtectedGold();
+                response.append("$" + gold + " (total) | $" + protectedGold + " (protected)\n");
+            } else {
+                response.append("No spy data");
+            }
+            response.append("Attack Str: " + info.getAttack(getHero()) + " | Defense Str: " + info.getDefense(getHero()) + "\n");
+            response.append("```" + MilitaryUnit.getUnitMarkdown(info.units()) + "``` ");
+        } else {
+            response.append("`no spy or war data`");
+        }
+        if (alert) {
+            response.append("Resource: `" + getResource_level() + "` | Alert: `" + getAlert_level() + "` Spell: `" + getSpell_alert() + "`\n");
+        }
+        return response.toString();
+    }
+
+    public static record HoldingInfo(long dateGold, long dateUnits, Map<MilitaryUnit, Long> units) {
+        public int getAttack(HeroType hero) {
+            return MilitaryUnit.getAttack(units, hero);
+        }
+
+        public int getDefense(HeroType hero) {
+            return MilitaryUnit.getDefense(units, hero);
+        }
+    }
+    public HoldingInfo getHoldings(boolean calculateUnitsFromAttacks) {
+        ScrapeKingdomUpdater scraper = Trocutus.imp().getScraper();
+        Map<MilitaryUnit, Long> result = new EnumMap<>(MilitaryUnit.class);
+
+        DBSpy spy = getLatestSpyReport();
+        DBAttack latestAttack = getLatestAttack();
+
+        long dateUnits = 0;
+        long dateGold = 0;
+
+        AllianceMembers.AllianceMember cached = scraper.getAllianceMemberStrength(realm_id, id);
+        if (cached != null) {
+            result.put(MilitaryUnit.SOLDIER, (long) cached.army.soldiers);
+            result.put(MilitaryUnit.ARCHER, (long) cached.army.archers);
+            result.put(MilitaryUnit.CAVALRY, (long) cached.army.cavalry);
+            result.put(MilitaryUnit.ELITE, (long) cached.army.elites);
+            dateUnits = System.currentTimeMillis();
+        }
+
+        if (latestAttack != null && (spy == null || spy.id < latestAttack.id) && result.isEmpty() && calculateUnitsFromAttacks) {
+            HeroType attHero = latestAttack.getAttacker() == null ? HeroType.VISIONARY : latestAttack.getAttacker().getHero();
+            HeroType defHero = latestAttack.getDefender() == null ? HeroType.VISIONARY : latestAttack.getDefender().getHero();
+            Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> units = MilitaryUnit.getUnits(latestAttack.getCost(true), latestAttack.getCost(false), attHero, defHero, true, true);
+            Map<MilitaryUnit, Long> myUnits = (latestAttack.attacker_id == id ? units.getKey() : units.getValue());
+
+            dateUnits = latestAttack.date;
+            result.putAll(myUnits);
+        }
+
+        if (spy != null) {
+            result.putIfAbsent(MilitaryUnit.SOLDIER, (long) spy.soldiers);
+            result.putIfAbsent(MilitaryUnit.ARCHER, (long) spy.archers);
+            result.putIfAbsent(MilitaryUnit.CAVALRY, (long) spy.cavalry);
+            result.putIfAbsent(MilitaryUnit.ELITE, (long) spy.elites);
+            result.putIfAbsent(MilitaryUnit.GOLD, (long) spy.gold);
+            dateGold = spy.date;
+            dateUnits = Math.max(dateUnits, spy.date);
+        }
+
+        if (dateUnits != 0) {
+            return new HoldingInfo(dateGold, dateUnits, result);
+        }
+
+        return null;
+    }
+
+    @Command
+    public int getProtectedGold() {
+        return total_land * 30;
+    }
 }

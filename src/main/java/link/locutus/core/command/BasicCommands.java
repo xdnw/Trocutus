@@ -161,6 +161,10 @@ public class BasicCommands {
             DBKingdom myKingdom = me.get(realm);
             String myName = myKingdom != null ? myKingdom.getSlug() : "__your_name__";
             result.append(kingdom.toMarkdown(myName, true));
+
+            result.append("\n");
+            result.append(myKingdom.getInfoRowMarkdown(myName, true, false, false));
+
             io.create().embed(kingdom.getName(), result.toString()).send();
         } else {
             Set<String> realms = kingdoms.stream().map(k -> k.getRealm().getName()).collect(Collectors.toSet());
@@ -255,7 +259,7 @@ public class BasicCommands {
     }
 
     @Command
-    public String raid(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults,  @Switch("g") boolean sortGold, @Switch("l") boolean sortLand, @Switch("i") boolean ignoreLosses, @Switch("dnr") boolean ignoreDoNotRaid) throws IOException {
+    public String raid(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults,  @Switch("g") boolean sortGold, @Switch("l") boolean sortLand, @Switch("i") boolean ignoreLosses, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean includeWarUnitEstimate) throws IOException {
         if (sortGold && sortLand) {
             sortGold = false;
             sortLand = false;
@@ -319,15 +323,9 @@ public class BasicCommands {
         for (int i = 0; i < numResults; i++) {
             Map.Entry<DBKingdom, Long> entry = values.get(i);
             DBKingdom kingdom = entry.getKey();
-            DBSpy spy = kingdom.getLatestSpyReport();
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), includeWarUnitEstimate));
             double value = entry.getValue();
-            response.append("__**" + kingdom.getName() + " | " + kingdom.getAllianceName() + ":**__ " + kingdom.getTotal_land() + " ns\n");
-            response.append("<" + kingdom.getUrl(myKingdom.getSlug()) + "> ");
-            response.append("Worth: `$" + MathMan.format((long) value) + "` (" + types + ")\n");
-            response.append("Spied: " + DiscordUtil.timestamp(spy.date, "R") + " | ");
-            response.append("Active: " + DiscordUtil.timestamp(kingdom.getLast_active(), "R") + "\n");
-            response.append("Attack Str: `" + spy.attack + "` | Defense Str: `" + spy.defense + "`\n");
-            response.append("Resource: `" + kingdom.getResource_level() + "` | Alert: `" + kingdom.getAlert_level() + "` Spell: `" + kingdom.getSpell_alert() + "`\n\n");
+            response.append("Worth: `$" + MathMan.format((long) value) + "` (" + types + ")\n\n");
         }
 
         double optimalBothFey = 0;
@@ -381,7 +379,7 @@ public class BasicCommands {
     }
 
     @Command
-    public String spyop(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin, @Switch("dnr") boolean ignoreDoNotRaid) throws IOException {
+    public String spyop(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean includeWarUnitEstimate) throws IOException {
         DBKingdom myKingdom = me.get(realm);
         if (myKingdom == null) return "You are not in a kingdom in this realm";
 
@@ -392,8 +390,8 @@ public class BasicCommands {
         AllianceMembers.AllianceMember memberInfo = Trocutus.imp().getScraper().getAllianceMemberStrength(myKingdom.getRealm_id(), myKingdom.getId());
         if (memberInfo == null) return "Could not find member info for " + myKingdom.getName();
 
-        int minScore = (int) (myKingdom.getTotal_land() * 0.5);
-        int maxScore = (int) (myKingdom.getTotal_land() * 1.5);
+        int minScore = (int) (myKingdom.getAttackMinRange());
+        int maxScore = (int) (myKingdom.getAttackMaxRange());
 
         Set<DBKingdom> inRange = realm.getKindoms(f -> f.getTotal_land() >= minScore && f.getTotal_land() <= maxScore);
         int myStr = myKingdom.getAttackStrength();
@@ -453,21 +451,8 @@ public class BasicCommands {
             Map.Entry<DBKingdom, Long> result = results.get(i);
             DBKingdom kingdom = result.getKey();
 
-            DBSpy spy = spies.get(kingdom.getId());
-            response.append("__**" + kingdom.getName() + " | " + kingdom.getAllianceName() + ":**__ " + kingdom.getTotal_land() + " ns\n");
-            response.append("<" + kingdom.getUrl(myKingdom.getSlug()) + "> ");
-            if (spy != null) {
-                response.append("Spied: " + DiscordUtil.timestamp(spy.date, "R") + " | ");
-            }
-            response.append("Active: " + DiscordUtil.timestamp(kingdom.getLast_active(), "R") + "\n");
-            if (spy != null) {
-                response.append("$" + spy.gold + " (total) | $" + spy.protectedGold + " (protected)\n");
-                response.append("Attack Str: " + spy.attack + " | Defense Str: " + spy.defense + "\n");
-                response.append("```" + spy.getUnitMarkdown() + "``` ");
-            } else {
-                response.append("`no spy data`");
-            }
-            response.append("Resource: `" + kingdom.getResource_level() + "` | Alert: `" + kingdom.getAlert_level() + "` Spell: `" + kingdom.getSpell_alert() + "`\n\n");
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), includeWarUnitEstimate));
+            response.append("\n\n");
         }
 
         return response.toString();

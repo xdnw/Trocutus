@@ -55,11 +55,6 @@ public class Auth {
             if (result.toLowerCase().contains("authenticate your request")) {
                 new Exception().printStackTrace();
             }
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
             return result;
         }
     }

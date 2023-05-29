@@ -763,8 +763,8 @@ public class SheetCommands {
         StringBuilder note = new StringBuilder();
 
         double score = nation.getScore();
-        double minScore = Math.ceil(nation.getScore() * 0.5);
-        double maxScore = Math.floor(nation.getScore() * 1.5);
+        double minScore = nation.getAttackMinRange();
+        double maxScore = nation.getAttackMaxRange();
         note.append("War Range: " + MathMan.format(minScore) + "-" + MathMan.format(maxScore) + " (" + score + ")").append("\n");
         note.append("ID: " + nation.getId()).append("\n");
         note.append("Alliance: " + nation.getAllianceName()).append("\n");

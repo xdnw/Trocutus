@@ -20,6 +20,7 @@ import link.locutus.core.settings.Settings;
 import link.locutus.util.GuildShardManager;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
+import link.locutus.util.TrounceUtil;
 import link.locutus.util.scheduler.CaughtRunnable;
 import link.locutus.util.scheduler.ThrowingConsumer;
 import net.dv8tion.jda.api.JDA;
@@ -62,6 +63,8 @@ public class Trocutus extends ListenerAdapter {
 
         Trocutus instance = new Trocutus();
         instance.start();
+
+        TrounceUtil.test();;
         Settings.INSTANCE.save(Settings.INSTANCE.getDefaultFile());
     }
 

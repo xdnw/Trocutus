@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public final class FileUtil {
     private static final String COOKIES_HEADER = "Set-Cookie";
@@ -128,6 +129,12 @@ public final class FileUtil {
         HEAD,
     }
     public static String readStringFromURL(String urlStr, byte[] dataBinary, RequestType type, CookieManager msCookieManager, Consumer<HttpURLConnection> apply) throws IOException {
+//        pageRequestQueue.submit(new Supplier<String>() {
+//            @Override
+//            public String get() {
+//                return null;
+//            }
+//        }, priority);
         URL url = new URL(urlStr);
         URLConnection con = url.openConnection();
         HttpURLConnection http = (HttpURLConnection) con;
@@ -219,6 +226,8 @@ public final class FileUtil {
             }
         }
     }
+
+    private static PageRequestQueue pageRequestQueue = new PageRequestQueue(3000);
 
     public static String readStringFromURL(String urlStr, Map<String, String> arguments, boolean post, CookieManager msCookieManager, Consumer<HttpURLConnection> apply) throws IOException {
         StringJoiner sj = new StringJoiner("&");

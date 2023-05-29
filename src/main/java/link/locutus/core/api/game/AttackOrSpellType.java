@@ -7,11 +7,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 public enum AttackOrSpellType {
-    ATTACK(200, 0, true, false),
-    SPY(0, 200, false, false),
-    FIREBALL(0, 2000, true, true),
-
-    // todo
+    ATTACK(200, 0, 0,true, false),
+    SPY(0, 200, 10,false, false) {
+        @Override
+        public Map<MilitaryUnit, Long> getDefaultCost() {
+            Map<MilitaryUnit, Long> result = super.getDefaultCost();
+            result.put(MilitaryUnit.EXP, -10L);
+            return result;
+        }
+    },
+    FIREBALL(0, 2000, 100,true, true),
 
     ;
 
@@ -19,19 +24,27 @@ public enum AttackOrSpellType {
     private final int mana;
     private final boolean attackAlert;
     private final boolean spellAlert;
+    private final int exp;
 
-    AttackOrSpellType(int bp, int mana, boolean attackAlert, boolean spellAlert) {
+    AttackOrSpellType(int bp, int mana, int exp, boolean attackAlert, boolean spellAlert) {
         this.bp = bp;
         this.mana = mana;
         this.attackAlert = attackAlert;
         this.spellAlert = spellAlert;
+        this.exp = exp;
     }
 
     public Map<MilitaryUnit, Long> getDefaultCost() {
         Map<MilitaryUnit, Long> cost = new HashMap<>();
         if (getBattlePoints() != 0) cost.put(MilitaryUnit.BATTLE_POINTS, (long) getBattlePoints());
         if (getMana() != 0) cost.put(MilitaryUnit.MANA, (long) getMana());
+        if (getExp() != 0) cost.put(MilitaryUnit.EXP, (long) -getExp());
+
         return cost;
+    }
+
+    public int getExp() {
+        return exp;
     }
 
     public int getBattlePoints() {

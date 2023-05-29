@@ -144,7 +144,7 @@ public class SpyBlitzGenerator {
         BiFunction<Double, Double, Integer> attScoreRange = TrounceUtil.getIsKingdomsInScoreRange(attList.keySet());
         BiFunction<Double, Double, Integer> defScoreRange = TrounceUtil.getIsKingdomsInScoreRange(defList.keySet());
 
-        defList.entrySet().removeIf(n -> attScoreRange.apply(n.getKey().getScore() * 0.5, n.getKey().getScore() * 1.5) == 0);
+        defList.entrySet().removeIf(n -> attScoreRange.apply((double) n.getKey().getAttackMinRange(), (double) n.getKey().getAttackMaxRange()) == 0);
 
         BiFunction<Double, Double, Double> attSpyGraph = TrounceUtil.getXInRange(attList.keySet(), n -> Math.pow(attList.get(n), 3));
         BiFunction<Double, Double, Double> defSpyGraph = TrounceUtil.getXInRange(defList.keySet(), n -> Math.pow(defList.get(n), 3));

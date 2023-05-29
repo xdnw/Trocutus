@@ -11,9 +11,11 @@ import link.locutus.core.api.pojo.pages.AllianceMembers;
 import link.locutus.core.api.pojo.pages.AlliancePage;
 import link.locutus.core.api.pojo.pages.AttackInteraction;
 import link.locutus.core.api.pojo.pages.Dashboard;
+import link.locutus.core.api.pojo.pages.FireballInteraction;
 import link.locutus.core.api.pojo.pages.SpyInteraction;
 import link.locutus.core.db.TrouncedDB;
 import link.locutus.core.db.entities.alliance.DBAlliance;
+import link.locutus.core.db.entities.spells.DBFireball;
 import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -127,9 +129,13 @@ public class ScrapeKingdomUpdater {
         }, 80000, 65000, TimeUnit.MILLISECONDS);
     }
 
-    public AllianceMembers.AllianceMember getAllianceMemberStrength(int realm_id, int kingdom_id) throws IOException {
+    public AllianceMembers.AllianceMember getAllianceMemberStrength(int realm_id, int kingdom_id) {
         if (allianceMembers.isEmpty()) {
-            fetchAllianceMemberStrength(realm_id);
+            try {
+                fetchAllianceMemberStrength(realm_id);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
         return allianceMembers.get(kingdom_id);
     }
@@ -307,18 +313,21 @@ public class ScrapeKingdomUpdater {
 
     public void updateKingdom(int realm_id, String name) throws IOException {
         System.out.println("Updating kingdom " + name);
-        String slug = name.toLowerCase(Locale.ROOT).trim().replaceAll("[^a-z0-9_-]", "").trim().replaceAll(" ", "-");
+        String slug = name.toLowerCase(Locale.ROOT).trim().replaceAll("[^a-z0-9_ -]", "").trim().replaceAll(" ", "-");
 
+        if (name.equalsIgnoreCase("vargstad")) {
+            new Exception().printStackTrace();
+        }
         // remove non alphanumeric underscore
         String url = "https://trounced.net/kingdom/" + auth.getKingdom(realm_id).getSlug() + "/search/" + slug;
         JSONObject json = getJson(url);
-        if (name.equalsIgnoreCase("Natashja")) {
-            System.out.println("JSON " + json);
-        }
         if (json == null) {
             Set<DBKingdom> kingdoms = db.getKingdomsMatching(f -> f.getRealm_id() == realm_id && f.getSlug().equalsIgnoreCase(slug));
             if (kingdoms.size() > 0) {
+                System.out.println("Deleting " + slug);
                 db.deleteKingdoms(kingdoms);
+            } else {
+                System.out.println("Coud not find kingdom in db " + name + " | " + slug);
             }
         } else {
             JSONObject props = json.getJSONObject("props");
@@ -399,6 +408,7 @@ public class ScrapeKingdomUpdater {
         Map<Integer, String> raw = new LinkedHashMap<>();
         List<DBAttack> attacks = new ArrayList<>();
         List<DBSpy> spies = new ArrayList<>();
+        List<DBFireball> fireballs = new ArrayList<>();
         for (Map.Entry<Integer, JSONObject> entry : interactionMap.entrySet()) {
             int id = entry.getKey();
             JSONObject interaction = entry.getValue();
@@ -408,6 +418,12 @@ public class ScrapeKingdomUpdater {
                     AttackInteraction.Attack pojo = mapper.readValue(interaction.toString(), AttackInteraction.Attack.class);
                     DBAttack attack = new DBAttack(pojo);
                     attacks.add(attack);
+                }
+                case "fireball" -> {
+                    // mapper to
+                    FireballInteraction.Fireball pojo = mapper.readValue(interaction.toString(), FireballInteraction.Fireball.class);
+                    DBFireball spell = new DBFireball(pojo);
+                    fireballs.add(spell);
                 }
                 case "spy" -> {
                     // mapper to
@@ -422,6 +438,7 @@ public class ScrapeKingdomUpdater {
         }
         // sort by id
         Collections.sort(attacks, Comparator.comparingInt(f -> f.id));
+        Collections.sort(fireballs, Comparator.comparingInt(f -> f.id));
         Collections.sort(spies, Comparator.comparingInt(f -> f.id));
 
         db.saveSpyOps(new LinkedHashSet<>(spies));
