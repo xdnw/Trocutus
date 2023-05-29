@@ -345,7 +345,7 @@ public class InterviewCommands {
             }
         }
 
-        response.append("\n\nTo assign a nation as your mentee, use " + "CM.interview.mentee.cmd.toSlashMention()");
+        response.append("\n\nTo assign a nation as your mentee, use " + CM.interview.mentee.set.cmd.toSlashMention());
         return response.toString();
     }
 
@@ -362,7 +362,7 @@ public class InterviewCommands {
     public String interview(@Me GuildDB db, DBKingdom kingdom, @Default("%user%") User user) {
         Map<DBRealm, DBKingdom> kingdoms = DBKingdom.getFromUser(user);
         if (kingdoms.isEmpty() || !kingdoms.containsValue(kingdom)) {
-            return "You are not registered to `" + kingdom.getName() + "`. Please register using `\"CM.register\"`";
+            return "You are not registered to `" + kingdom.getName() + "`. Please register using " + CM.register.cmd.toSlashMention();
         }
         IACategory iaCat = db.getIACategory(true, true, true);
 

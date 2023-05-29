@@ -125,12 +125,14 @@ public class KingdomPlaceholders extends Placeholders<DBKingdom> {
         return format(arg, 0, new Function<String, String>() {
             @Override
             public String apply(String placeholder) {
+                System.out.println("Get metric " + placeholder);
                 KingdomAttribute result = KingdomPlaceholders.this.getMetric(store, placeholder, false);
                 if (result != null) {
                     Object obj = result.apply(me);
                     if (obj != null) {
                         return obj.toString();
                     }
+                    System.out.println("Apply " + result.getName());
                 }
                 return placeholder;
             }

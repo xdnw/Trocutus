@@ -1,5 +1,6 @@
 package link.locutus.core.db.guild.interview;
 
+import link.locutus.core.command.CM;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
@@ -83,7 +84,7 @@ public class IAChannel {
                 Map.Entry<Object, String> result = entry.getValue();
                 emojis.add(type.emoji);
             }
-            String cmd = "";//""CM.audit.run.cmd.create(nation.getId() + "", null, null, null, null, null).toCommandArgs()";
+            String cmd = CM.audit.run.cmd.create(nation.getId() + "", null, null, null, null, null).toCommandArgs();
             IACheckup.createEmbed(channel, null, cmd, nation, audits, 0);
         }
 //        emojis.remove("");

@@ -78,8 +78,9 @@ public class TrounceUtilCommands {
             double losses = strength * 3;
             double loot = 88 * land * 0.2;
             double landLoot = TrounceUtil.landLoot(my_score, land);
-            double netBoth = loot + landLoot * 500 - losses;
-            double netLand = landLoot * 500 - losses;
+            double landValue = TrounceUtil.getFeyDPA(land) * landLoot;
+            double netBoth = loot + landLoot * landValue  - losses;
+            double netLand = landLoot * landValue - losses;
             double netGold = loot - losses;
             if (netBoth > optimalBothValue) {
                 optimalBothValue = netBoth;
@@ -99,7 +100,6 @@ public class TrounceUtilCommands {
 
         StringBuilder response = new StringBuilder();
         response.append("Your Land: " + MathMan.format(my_score) + " | Your Attack: " + MathMan.format(my_attack) + "\n");
-        response.append("Your army is on par with fey of approx. ~" + MathMan.format(fey) + " land\n");
         response.append("Optimal fey targets:\n");
         // both
         response.append("- land+gold: " + MathMan.format(optimalBothFey) + " land -> net $" + MathMan.format((long) optimalBothValue) + "\n");

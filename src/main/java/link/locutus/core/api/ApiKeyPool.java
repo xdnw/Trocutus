@@ -1,6 +1,7 @@
 package link.locutus.core.api;
 
 import link.locutus.Trocutus;
+import link.locutus.core.db.guild.GuildKey;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,7 +43,7 @@ public class ApiKeyPool {
             this.nextIndex = 0;
         }
         if (this.apiKeyPool.isEmpty())
-            throw new IllegalArgumentException("No API key found: " + "CM.API_KEY.getCommandMention()" + "`)");
+            throw new IllegalArgumentException("No API key found." + "`)");
         ApiKey key = this.apiKeyPool.get(this.nextIndex++);
         key.use();
         return key;

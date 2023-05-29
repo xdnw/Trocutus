@@ -87,37 +87,6 @@ public class CommandManager extends ListenerAdapter {
     }
 
     public CommandManager registerCommands() {
-        List<Object> classes = new ArrayList<>();
-        classes.add(new AdminCommands());
-        classes.add(new AnnounceCommands());
-        classes.add(new BasicCommands());
-        classes.add(new CredentialCommands());
-        classes.add(new DiscordCommands());
-        classes.add(new EmbedCommands());
-        classes.add(new FACommands());
-        classes.add(new FunCommands());
-        classes.add(new HelpCommands());
-        classes.add(new IACommands());
-        classes.add(new InterviewCommands());
-        classes.add(new KingdomCommands());
-        classes.add(new PlayerSettingCommands());
-        classes.add(new SettingCommands());
-        classes.add(new SheetCommands());
-        classes.add(new StatCommands());
-        classes.add(new TrounceUtilCommands());
-
-        for (Object obj : classes) {
-            String name = obj.getClass().getSimpleName();
-            name = name.replaceAll("(.)(\\p{Upper})", "$1_$2").toLowerCase(Locale.ROOT);
-
-            for (Method method : obj.getClass().getDeclaredMethods()) {
-                if (method.getAnnotation(Command.class) == null) continue;
-                String methodName = method.getName();
-                String line = "this.commands.registerMethod(" + name + ", List.of(\"" + name + "\"), \"" + methodName + "\", \"" + methodName + "\");";
-                System.out.println(line);
-            }
-        }
-
         AdminCommands admin_commands = new AdminCommands();
         AnnounceCommands announce_commands = new AnnounceCommands();
         BasicCommands basic_commands = new BasicCommands();
@@ -143,6 +112,7 @@ public class CommandManager extends ListenerAdapter {
         // trounce_util_commands
         TrounceUtilCommands trounce_util_commands = new TrounceUtilCommands();
         HelpCommands help_commands = new HelpCommands();
+        WarCommands war_commands = new WarCommands();
 
         this.commands.registerMethod(admin_commands, List.of("admin"), "stop", "stop");
         this.commands.registerMethod(admin_commands, List.of("user"), "dm", "dm");
@@ -174,6 +144,7 @@ public class CommandManager extends ListenerAdapter {
         this.commands.registerMethod(basic_commands, List.of("war", "find"), "raid", "raid");
         this.commands.registerMethod(basic_commands, List.of(), "spyop", "spyop");
         this.commands.registerMethod(basic_commands, List.of("war", "find"), "spyop", "intel");
+        this.commands.registerMethod(war_commands, List.of("war", "find"), "war", "enemy");
 
         this.commands.registerMethod(basic_commands, List.of("mail"), "mail", "send");
         this.commands.registerMethod(credential_commands, List.of("credentials"), "addApiKey", "addApiKey");
@@ -283,6 +254,11 @@ public class CommandManager extends ListenerAdapter {
         this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAllKingdoms", "kingdoms");
 
         registerSettings();
+
+        StringBuilder output = new StringBuilder();
+        this.commands.generatePojo("", output, 0);
+        System.out.println(output);
+
         return this;
     }
 

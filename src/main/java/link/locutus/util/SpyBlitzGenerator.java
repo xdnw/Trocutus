@@ -89,10 +89,16 @@ public class SpyBlitzGenerator {
                 String attStr = MarkupUtil.sheetUrl(attacker.getName(), TrounceUtil.getUrl(attacker.getId(), false));
 
                 if (multipleAAs) {
-                    attStr += "& \"|" + spyop.getType().name() + "|" + attacker.getAllianceName() + "\"";
+                    attStr += "& \"|" + spyop.getType().name() + "|" + attacker.getAllianceName();
                 } else {
-                    attStr += "& \"|" + spyop.getType().name() + "\"";
+                    attStr += "& \"|" + spyop.getType().name();
                 }
+                if (spyop.isMaxUnit()) {
+                    attStr += " |max";
+                } else if (spyop.getType().isAttackAlert()) {
+                    attStr += " |min";
+                }
+                attStr += "\"";
 
                 row.add(attStr);
             }
@@ -156,15 +162,17 @@ public class SpyBlitzGenerator {
                 if (!attacker.isInSpyRange(defender)) continue;
                 int defStrength = defender.getDefenseStrength();
                 boolean weaker = myStrength < defStrength;
+                boolean useMax = myStrength > defStrength;
+                int useStrength = useMax ? myStrength : (int) (myStrength * 0.2);
 
                 AttackOrSpellType bestSpell = null;
                 double maxDamage = Double.MIN_VALUE;
                 for (AttackOrSpellType operation : allowedOpTypes) {
                     if (weaker && !allowWeaker.test(operation)) continue;
-                    double damage = operation.getDefaultDamage(attacker, defender, myStrength, defStrength, unitDamage, landDamage, net);
+                    double damage = operation.getDefaultDamage(attacker, defender, useStrength, defStrength, unitDamage, landDamage, net);
                     double netDamage = damage;
                     if (!net) {
-                        netDamage = operation.getDefaultDamage(attacker, defender, myStrength, defStrength, unitDamage, landDamage, true);
+                        netDamage = operation.getDefaultDamage(attacker, defender, useStrength, defStrength, unitDamage, landDamage, true);
                     }
                     if (skipNegativeNet && netDamage < 0) {
                         continue;
@@ -175,7 +183,7 @@ public class SpyBlitzGenerator {
                     }
                 }
                 if (bestSpell != null) {
-                    ops.add(new SpellOp(bestSpell, attacker, defender, maxDamage));
+                    ops.add(new SpellOp(bestSpell, attacker, defender, useMax && bestSpell.isAttackAlert(), maxDamage));
                 }
             }
         }
@@ -348,7 +356,8 @@ public class SpyBlitzGenerator {
                         attacker = other;
                     }
                     AttackOrSpellType opType = AttackOrSpellType.valueOf(split[1]);
-                    SpellOp op = new SpellOp(opType, attacker, defender, 0);
+                    boolean maxUnits = split.length >= 3 && split[2].toLowerCase().contains("max");
+                    SpellOp op = new SpellOp(opType, attacker, defender, maxUnits, 0);
                     targets.computeIfAbsent(attacker, f -> new LinkedHashSet<>()).add(op);
                 }
             } else {

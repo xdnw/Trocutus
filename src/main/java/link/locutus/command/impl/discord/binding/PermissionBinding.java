@@ -12,6 +12,7 @@ import link.locutus.command.impl.discord.permission.NotGuild;
 import link.locutus.command.impl.discord.permission.RankPermission;
 import link.locutus.command.impl.discord.permission.RolePermission;
 import link.locutus.command.impl.discord.permission.WhitelistPermission;
+import link.locutus.core.command.CM;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
@@ -78,7 +79,7 @@ public class PermissionBinding extends BindingHelper {
             throw new IllegalCallerException("Guild is not whitelisted");
         }
         if (!Roles.MEMBER.has(user, db.getGuild())) {
-            throw new IllegalCallerException("You do not have " + Roles.MEMBER + " " + user.getAsMention() + " see: " + "CM.role.setAlias.cmd.toSlashMention()");
+            throw new IllegalCallerException("You do not have " + Roles.MEMBER + " " + user.getAsMention() + " see: " + CM.role.alias.set.cmd.toSlashMention());
         }
         return true;
     }
@@ -133,7 +134,7 @@ public class PermissionBinding extends BindingHelper {
             if (allianceId != null && !requiredRole.has(user, guild, allianceId) ||
                     (!requiredRole.has(user, guild) && (!perm.alliance() || requiredRole.getAllowedAccounts(user, guild).isEmpty()))) {
                 if (perm.any()) continue;
-                throw new IllegalCallerException("You do not have " + requiredRole.name() + " on " + guild + " " + user.getAsMention() + " see: " + "CM.role.setAlias.cmd.toSlashMention()");
+                throw new IllegalCallerException("You do not have " + requiredRole.name() + " on " + guild + " " + user.getAsMention() + " see: " + CM.role.alias.set.cmd.toSlashMention());
             } else {
                 hasAny = true;
             }

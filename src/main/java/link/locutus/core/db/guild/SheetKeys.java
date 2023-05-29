@@ -6,7 +6,7 @@ public enum SheetKeys {
 
     ACTIVITY_SHEET,
 
-    NATION_SHEET,
+    KINGDOM_SHEET,
 
     SPYOP_SHEET,
 

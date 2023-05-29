@@ -47,11 +47,11 @@ public class KingdomCommands {
         if (!dnr) {
             title = ("do NOT raid " + nation.getName());
         }  else if (nation.getPosition().ordinal() > 1 && nation.getActive_m() < 10000) {
-            title = ("You CAN raid " + nation.getName() + " (however they are an active member of an alliance), see also: " + "CM.alliance.stats.counterStats.cmd.toSlashMention()" + "");
+            title = ("You CAN raid " + nation.getName() + " (however they are an active member of an alliance)");
         } else if (nation.getPosition().ordinal() > 1) {
-            title =  "You CAN raid " + nation.getName() + " (however they are a member of an alliance), see also: " + "CM.alliance.stats.counterStats.cmd.toSlashMention()" + "";
+            title =  "You CAN raid " + nation.getName() + " (however they are a member of an alliance)";
         } else if (nation.getAlliance_id() != 0) {
-            title =  "You CAN raid " + nation.getName() + ", see also: " + "CM.alliance.stats.counterStats.cmd.toSlashMention()" + "";
+            title =  "You CAN raid " + nation.getName();
         } else {
             title =  "You CAN raid " + nation.getName();
         }

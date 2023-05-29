@@ -124,13 +124,28 @@ public class TrounceUtil {
     }
 
     public static double getFeyLand(int myLand, int attack) {
-        if (myLand < 20000) {
-            return Math.sqrt(20000d * attack / 20d);
-        } else if (myLand < 50000) {
-            return Math.sqrt(20000d * 20 + 30000 * (attack - 20d) / 20d);
-        } else {
-            return attack / 40d;
+        double valueLow = Math.sqrt(20000d * attack / 20d);
+        double valueMid = 10 * (Math.sqrt(5) * Math.sqrt(3 * attack + 50) - 500);
+        double valueHigh = attack / 40d;
+
+        if (valueHigh < 50000) {
+            if (valueMid < 20000 || valueMid >= 50000) {
+                return valueLow;
+            }
+            return valueMid;
         }
+        return valueHigh;
+    }
+
+    public static double getLandValue(int currentLand, int amt) {
+        // 40 soldiers per acre
+
+        // 20 per 2 turns
+        // 40 soldiers per acre
+        // 88 * land * 0.2
+        // x = 1 / 40
+
+        return getFeyDPA(currentLand) * 50 * amt;
     }
 
     public static double getFeyDPA(int land) {

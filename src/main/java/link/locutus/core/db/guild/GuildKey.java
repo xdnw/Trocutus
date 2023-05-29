@@ -7,6 +7,7 @@ import link.locutus.command.binding.annotation.Me;
 import link.locutus.command.impl.discord.permission.RolePermission;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.command.CM;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.kingdom.KingdomFilter;
@@ -385,7 +386,7 @@ public class GuildKey {
         @Override
         public GuildDB validate(GuildDB db, GuildDB otherDb) {
             if (otherDb.getIdLong() == db.getGuild().getIdLong())
-                throw new IllegalArgumentException("Use " + "CM.settings.delete.cmd.create(FA_SERVER.name())" + " to unset the FA_SERVER");
+                throw new IllegalArgumentException("Use " + CM.settings.delete.cmd.create(FA_SERVER.name()) + " to unset the FA_SERVER");
             if (FA_SERVER.has(otherDb, false))
                 throw new IllegalArgumentException("Circular reference. The server you have set already defers its FA_SERVER");
             return otherDb;
@@ -500,7 +501,7 @@ public class GuildKey {
         }
         @Override
         public String help() {
-            return "The name or id of the CATEGORY you would like embassy channels created in (for " + "CM.embassy.cmd.toSlashMention()" + ")";
+            return "The name or id of the CATEGORY you would like embassy channels created in (for " + CM.embassy.cmd.toSlashMention() + ")";
         }
     }.setupRequirements(f -> f.requireFunction(new Consumer<GuildDB>() {
         @Override
@@ -595,7 +596,7 @@ public class GuildKey {
         if (interviewerRole == null) interviewerRole = Roles.INTERNAL_AFFAIRS_STAFF.toRole(db.getGuild());
         if (interviewerRole == null) interviewerRole = Roles.INTERNAL_AFFAIRS.toRole(db.getGuild());
         if (interviewerRole == null) {
-            throw new IllegalArgumentException("Please use: " + "CM.role.setAlias.cmd.toSlashMention()" + " to set at least ONE of the following:\n" +
+            throw new IllegalArgumentException("Please use: " + CM.role.alias.set.cmd.toSlashMention() + " to set at least ONE of the following:\n" +
                     StringMan.join(Arrays.asList(Roles.INTERVIEWER, Roles.MENTOR, Roles.INTERNAL_AFFAIRS_STAFF, Roles.INTERNAL_AFFAIRS), ", "));
         }
     }));
@@ -607,7 +608,7 @@ public class GuildKey {
         }
         @Override
         public String help() {
-            return "The name or id of the CATEGORY you would like " + "CM.channel.close.current.cmd.toSlashMention()" + " to move channels to";
+            return "The name or id of the CATEGORY you would like " + CM.channel.close.cmd.toSlashMention() + " to move channels to";
         }
     }.setupRequirements(f -> f.requireValidAlliance().requires(INTERVIEW_PENDING_ALERTS));
 

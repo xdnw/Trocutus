@@ -19,6 +19,7 @@ import link.locutus.core.api.game.AttackOrSpellType;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.game.TreatyType;
+import link.locutus.core.command.CM;
 import link.locutus.core.command.CommandManager;
 import link.locutus.core.command.DiscordCommands;
 import link.locutus.core.db.entities.alliance.AllianceList;
@@ -442,7 +443,7 @@ public class TrouncedBindings extends BindingHelper {
         if (!coalitions.contains(input)) throw new IllegalArgumentException(
                 "No coalition found matching: `" + input +
                         "`. Options: " + StringMan.getString(coalitions) + "\n" +
-                        "Create it via " + "CM.coalition.create.cmd.toSlashMention()"
+                        "Create it via " + CM.coalition.create.cmd.toSlashMention()
         );
         return input;
     }
@@ -451,7 +452,7 @@ public class TrouncedBindings extends BindingHelper {
     public AllianceList allianceList(ParameterData param, @Default @Me User user, @Me GuildDB db) {
         AllianceList list = db.getAllianceList();
         if (list == null) {
-            throw new IllegalArgumentException("This guild has no registered alliance. See " + "CM.settings.info.cmd.toSlashMention()" + " with key " + GuildKey.ALLIANCE_ID.name());
+            throw new IllegalArgumentException("This guild has no registered alliance. See " + CM.settings.info.cmd.toSlashMention() + " with key " + GuildKey.ALLIANCE_ID.name());
         }
         RolePermission perms = param.getAnnotation(RolePermission.class);
         if (perms != null) {

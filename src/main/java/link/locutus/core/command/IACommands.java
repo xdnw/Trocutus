@@ -62,7 +62,7 @@ public class IACommands {
         for (DBKingdom nation : nations) {
             if (!db.isAllianceId(nation.getAlliance_id())) {
                 return "Kingdom `" + nation.getName() + "` is in " + nation.getAlliance().getQualifiedName() + " but this server is registered to: "
-                        + StringMan.getString(db.getAllianceIds()) + "\nSee: " + "CM.settings.info.cmd.toSlashMention()" + " with key `" + GuildKey.ALLIANCE_ID.name() + "`";
+                        + StringMan.getString(db.getAllianceIds()) + "\nSee: " + CM.settings.info.cmd.toSlashMention() + " with key `" + GuildKey.ALLIANCE_ID.name() + "`";
             }
         }
 
@@ -73,7 +73,7 @@ public class IACommands {
         IACheckup checkup = new IACheckup(db, db.getAllianceList().subList(aaIds), false);
 
         Auth auth = mailResults ? db.getMailAuth() : null;
-        if (mailResults && auth == null) throw new IllegalArgumentException("No API_KEY set, please use " + "CM.credentials.login.cmd.toSlashMention()" + "");
+        if (mailResults && auth == null) throw new IllegalArgumentException("No auth set, please use " + CM.credentials.login.cmd.toSlashMention() + "");
 
         CompletableFuture<IMessageBuilder> msg = channel.send("Please wait...");
 

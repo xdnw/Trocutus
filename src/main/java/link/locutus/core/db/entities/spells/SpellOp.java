@@ -8,12 +8,18 @@ public class SpellOp {
     private final DBKingdom attacker;
     private final DBKingdom target;
     private final double damage;
+    private final boolean isMaxUnit;
 
-    public SpellOp(AttackOrSpellType type, DBKingdom attacker, DBKingdom target, double damage) {
+    public SpellOp(AttackOrSpellType type, DBKingdom attacker, DBKingdom target, boolean isMaxUnit, double damage) {
         this.type = type;
         this.attacker = attacker;
         this.target = target;
         this.damage = damage;
+        this.isMaxUnit = isMaxUnit;
+    }
+
+    public boolean isMaxUnit() {
+        return isMaxUnit;
     }
 
     public AttackOrSpellType getType() {

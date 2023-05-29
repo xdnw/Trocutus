@@ -152,8 +152,9 @@ public class KingdomListener {
     private boolean enemyAlert(DBKingdom previous, DBKingdom current) {
         if (current.getActive_m() > 7200) return false;
 
-        if (previous.getAlert_level() > current.getAlert_level()) return false;
-        if (previous.getSpell_alert() > current.getSpell_alert()) return false;
+//        if (previous.getAlert_level() > current.getAlert_level() && previous.getSpell_alert() > current.getSpell_alert()) return false;
+        if (previous.getAlert_level() == 0 && previous.getSpell_alert() == 0) return false;
+        if (current.getAlert_level() > 0 && current.getSpell_alert() > 0) return false;
 
         if (current.getActive_m() > 7200) return false;
 

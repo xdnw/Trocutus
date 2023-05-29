@@ -5,6 +5,7 @@ import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.command.IMessageIO;
 import link.locutus.command.impl.discord.DiscordChannelIO;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.command.CM;
 import link.locutus.core.db.entities.alliance.AllianceList;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
@@ -674,7 +675,7 @@ public class IACategory {
                 return false;
             }
         },
-        SPIES("hasn't used " + "CM.nation.spies.cmd.toSlashCommand()" + " and " + "CM.spy.find.intel.cmd.toSlashCommand()" + " (and posted spy report)") {
+        SPIES("hasn't used " + CM.war.find.intel.cmd.toSlashCommand() + " and " + "CM.spy.find.intel.cmd.toSlashCommand()" + " (and posted spy report)") {
             @Override
             public boolean matches(IACategory iaCat, GuildDB db, Set<Integer> allianceIds, GuildMessageChannel channel, IAChannel iaChan) {
                 if (iaChan == null) return false;

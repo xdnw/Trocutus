@@ -10,6 +10,7 @@ import link.locutus.command.command.StringMessageIO;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.ResourceLevel;
+import link.locutus.core.api.pojo.pages.AllianceMembers;
 import link.locutus.core.db.entities.Activity;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -85,7 +86,7 @@ public class DBKingdom implements KingdomOrAlliance {
             String[] split = input.split("/", 2);
             DBRealm realm = DBRealm.parse(split[0]);
             if (realm == null) return null;
-            Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.realm_id == realm.getId() && f.getName().equalsIgnoreCase(split[1]));
+            Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.realm_id == realm.getId() && (f.getName().equalsIgnoreCase(split[1]) || f.getSlug().equalsIgnoreCase(split[1])));
             if (matching.size() >= 1) return matching.iterator().next();
         }
         String finalInput = input;
@@ -616,12 +617,24 @@ public class DBKingdom implements KingdomOrAlliance {
 
     @Command
     public int getAttackStrength() {
+        try {
+            AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
+            if (strength != null) return strength.stats.attack;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.attack;
     }
 
     @Command
     public int getDefenseStrength() {
+        try {
+            AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
+            if (strength != null) return strength.stats.defense;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.defense;
     }
@@ -634,7 +647,7 @@ public class DBKingdom implements KingdomOrAlliance {
     public String toMarkdown(String myName, boolean embed) {
         if (myName == null) myName = "__your_name__";
         StringBuilder result = new StringBuilder();
-        String url = getUrl("");
+        String url = getUrl(myName);
         result.append("<" + url + ">\n");
 
         User user = getUser();

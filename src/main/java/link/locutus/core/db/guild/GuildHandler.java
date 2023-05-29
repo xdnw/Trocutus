@@ -1,6 +1,7 @@
 package link.locutus.core.db.guild;
 
 import com.google.common.eventbus.Subscribe;
+import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.impl.discord.DiscordChannelIO;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.entities.war.DBAttack;
@@ -99,17 +100,19 @@ public class GuildHandler {
             checkPingMilcom = false;
         }
 
+        StringBuilder append = new StringBuilder();
+
         if (checkPingMilcom) {
             Role role = Roles.MILCOM.toRole(db);
             if (role != null) {
-                body.append("\n" + role.getAsMention());
+                append.append("\n" + role.getAsMention());
             }
         }
 
         if (defender != null) {
             User user = defender.getUser();
             if (user != null) {
-                body.append("\n" + user.getAsMention());
+                append.append("\n" + user.getAsMention());
             }
         }
 
@@ -118,15 +121,17 @@ public class GuildHandler {
             if (!canRaid.apply(defender)) {
                 User user = attacker.getUser();
                 String userName = user == null  ? attacker.getName() : user.getAsMention();
-                body.append("\n**WARNING** " + userName + ": The attack against " + defender.getName() + " in " + defenderAllianceName + " is a violation of the Do Not Raid. (ignore this message if you were authorized)\n");
+                append.append("\n**WARNING** " + userName + ": The attack against " + defender.getName() + " in " + defenderAllianceName + " is a violation of the Do Not Raid. (ignore this message if you were authorized)\n");
                 Role faRole = Roles.FOREIGN_AFFAIRS.toRole(db);
                 if (faRole != null) {
-                    body.append("\n" + faRole.getAsMention());
+                    append.append("\n" + faRole.getAsMention());
                 }
             }
         }
 
-        new DiscordChannelIO(channel).create().embed(title, body.toString()).send();
+        IMessageBuilder msg = new DiscordChannelIO(channel).create().embed(title, body.toString());
+        if (!append.isEmpty()) msg.append(append.toString());
+        msg.send();
     }
 
     @Subscribe

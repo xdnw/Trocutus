@@ -1,7 +1,5 @@
 package link.locutus.core.command;
 
-import com.google.api.services.sheets.v4.model.CellData;
-import com.google.api.services.sheets.v4.model.RowData;
 import link.locutus.Trocutus;
 import link.locutus.command.binding.Key;
 import link.locutus.command.binding.LocalValueStore;
@@ -10,25 +8,20 @@ import link.locutus.command.binding.annotation.Arg;
 import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Default;
 import link.locutus.command.binding.annotation.Me;
-import link.locutus.command.binding.annotation.Range;
 import link.locutus.command.binding.annotation.Switch;
 import link.locutus.command.binding.annotation.Timestamp;
 import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.command.IMessageIO;
 import link.locutus.command.impl.discord.permission.RolePermission;
-import link.locutus.command.impl.discord.permission.WhitelistPermission;
-import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.AttackOrSpellType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.Activity;
-import link.locutus.core.db.entities.alliance.AllianceList;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.kingdom.KingdomAttribute;
-import link.locutus.core.db.entities.kingdom.KingdomList;
 import link.locutus.core.db.entities.kingdom.KingdomPlaceholders;
 import link.locutus.core.db.entities.kingdom.SimpleKingdomList;
 import link.locutus.core.db.entities.spells.BPManaEntry;
@@ -46,8 +39,6 @@ import link.locutus.util.SpyBlitzGenerator;
 import link.locutus.util.StringMan;
 import link.locutus.util.TimeUtil;
 import link.locutus.util.TrounceUtil;
-import link.locutus.util.builder.RankBuilder;
-import link.locutus.util.spreadsheet.SheetUtil;
 import link.locutus.util.spreadsheet.SpreadSheet;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Guild;
@@ -57,7 +48,6 @@ import org.apache.commons.lang3.ClassUtils;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
@@ -77,7 +67,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -208,7 +197,7 @@ public class SheetCommands {
                                    List<String> columns,
                                    @Switch("s") SpreadSheet sheet) throws GeneralSecurityException, IOException {
         if (sheet == null) {
-            sheet = SpreadSheet.create(db, SheetKeys.NATION_SHEET);
+            sheet = SpreadSheet.create(db, SheetKeys.KINGDOM_SHEET);
         }
         List<String> header = new ArrayList<>(columns);
         for (int i = 0; i < header.size(); i++) {
@@ -324,7 +313,7 @@ public class SheetCommands {
                     List<SpellOp> currentOps = targets.computeIfAbsent(enemy, f -> new ArrayList<>());
                     if (currentOps.size() > 1) continue;
                     if (currentOps.size() == 1 && currentOps.get(0).getAttacker() == attacker) continue;
-                    SpellOp op = new SpellOp(AttackOrSpellType.SPY, attacker, enemy, 0);
+                    SpellOp op = new SpellOp(AttackOrSpellType.SPY, attacker, enemy, false, 0);
                     currentOps.add(op);
                     iter.remove();
                     continue outer;
@@ -526,11 +515,11 @@ public class SheetCommands {
 
         Auth auth = db.getMailAuth();
         if (auth == null){
-            return "No api key found. Please use" + "CM.credentials.login.cmd.toSlashMention()";
+            return "No api key found. Please use" + CM.credentials.login.cmd.toSlashMention();
         }
 
         if (header != null && !header.isEmpty() && !Roles.MAIL.has(author, guild)) {
-            return "You need the MAIL role on discord (see " + "CM.role.setAlias.cmd.toSlashMention()" + ") to add the custom message: `" + header + "`";
+            return "You need the MAIL role on discord (see " + CM.role.alias.set.cmd.toSlashMention() + ") to add the custom message: `" + header + "`";
         }
         Map<DBKingdom, Set<DBKingdom>> warDefAttMap = new HashMap<>();
         Map<DBKingdom, Set<DBKingdom>> spyDefAttMap = new HashMap<>();
@@ -653,6 +642,12 @@ public class SheetCommands {
 
                     mail.append((i + 1) + ". " + nationUrl + " | ");
                     mail.append(spyop.getType());
+
+                    if (spyop.isMaxUnit()) {
+                        mail.append(" | Max Units");
+                    } else if (spyop.getType().isAttackAlert()) {
+                        mail.append(" | Min Units");
+                    }
 
                     mail.append("\n");
                 }
@@ -806,7 +801,7 @@ public class SheetCommands {
             if (aaIds.isEmpty()) {
                 Set<Integer> allies = db.getAllies(true);
                 if (allies.isEmpty()) {
-                    return "No alliance or allies are set.\n" + GuildKey.ALLIANCE_ID.getCommandMention() + "\nOR\n " + "CM.coalition.create.cmd.create(null, Coalition.ALLIES.name())" + "";
+                    return "No alliance or allies are set.\n" + GuildKey.ALLIANCE_ID.getCommandMention() + "\nOR\n " + CM.coalition.create.cmd.create(null, Coalition.ALLIES.name()) + "";
                 } else {
                     counterWith = new HashSet<>(Trocutus.imp().getDB().getKingdomsMatching(f -> allies.contains(f.getAlliance_id())));
                 }

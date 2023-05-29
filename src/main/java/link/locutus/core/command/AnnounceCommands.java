@@ -61,7 +61,7 @@ public class AnnounceCommands {
                            @Switch("f") boolean force) throws IOException {
         Auth auth = db.getMailAuth();
 
-        if (auth == null) throw new IllegalArgumentException("No API_KEY set, please use " + "CM.credentials.addApiKey.cmd.toSlashMention()" + "");
+        if (auth == null) throw new IllegalArgumentException("No API_KEY set, please use " + CM.credentials.addApiKey.cmd.toSlashMention() + "");
         Set<Integer> aaIds = db.getAllianceIds();
 
         List<String> errors = new ArrayList<>();

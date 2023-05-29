@@ -133,7 +133,8 @@ public class DBAlliance implements KingdomOrAlliance {
     }
 
     public String getUrl(String kingdomName) {
-        return "https://trounced.net/kingdom/" + kingdomName + "/alliance/" + getName();
+        if (kingdomName == null) kingdomName = "__your_name__";
+        return "https://trounced.net/kingdom/" + kingdomName + "/alliance/" + getTag();
     }
 
     public int getId() {

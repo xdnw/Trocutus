@@ -147,7 +147,7 @@ public class DiscordCommands {
     @IsAlliance
     public static String aliasRole(@Me User author, @Me Guild guild, @Me GuildDB db, @Default Roles locutusRole, @Default() Role discordRole, @Arg("If the role mapping is only for a specific alliance (WIP)") @Default() DBAlliance alliance, @Arg("Remove the existing mapping instead of setting it") @Switch("r") boolean removeRole) {
         if (alliance != null && !db.isAllianceId(alliance.getId())) {
-            return "Alliance: " + alliance.getId() + " not registered to guild " + db.getGuild() + ". See: " + "CM.settings.info.cmd.toSlashMention()" + " with key: " + GuildKey.ALLIANCE_ID.name();
+            return "Alliance: " + alliance.getId() + " not registered to guild " + db.getGuild() + ". See: " + CM.settings.info.cmd.toSlashMention() + " with key: " + GuildKey.ALLIANCE_ID.name();
         }
         StringBuilder response = new StringBuilder();
         boolean showGlobalMappingInfo = false;
@@ -173,7 +173,7 @@ public class DiscordCommands {
                     }
                     response.append("Removed aliases for " + discordRole.getName() + ":\n- ");
                     response.append(StringMan.join(rolesListStr, "\n- "));
-                    response.append("\n\nUse " + "CM.role.setAlias.cmd.toSlashMention()" + " to view current role aliases");
+                    response.append("\n\nUse " + CM.role.alias.set.cmd.toSlashMention() + " to view current role aliases");
                     return response.toString();
                 }
 
@@ -257,7 +257,7 @@ public class DiscordCommands {
         }
 
         if (removeRole) {
-            throw new IllegalArgumentException("Cannot remove role alias with this command. Use " + "CM.role.unregister.cmd.create(locutusRole.name(), null).toSlashCommand()" + "");
+            throw new IllegalArgumentException("Cannot remove role alias with this command. Use " + CM.role.alias.remove.cmd.create(locutusRole.name(), null).toSlashCommand() + "");
         }
 
 
@@ -265,7 +265,7 @@ public class DiscordCommands {
         String allianceStr = alliance == null ? "*" : alliance.getName() + "/" + aaId;
         db.addRole(locutusRole, discordRole, aaId);
         return "Added role alias: " + locutusRole.name().toLowerCase() + " to " + discordRole.getName() + " for alliance " + allianceStr + "\n" +
-                "To unregister, use " + "CM.role.unregister.cmd.create(locutusRole.name(), null).toSlashCommand()" + "";
+                "To unregister, use " + CM.role.alias.remove.cmd.create(locutusRole.name(), null).toSlashCommand() + "";
     }
 
     private static String mappingToString(Map<Long, Role> mapping) {
@@ -655,7 +655,7 @@ public class DiscordCommands {
             commands.putAll(reactions);
         }
 
-        String cmd = "CM.embed.commands.cmd.create(title, desc, StringMan.join(commands.values().toSlashCommand()";
+        String cmd = CM.embed.create.cmd.create(title, desc, StringMan.join(commands.values(), ",")).toSlashCommand();
         return "```" + cmd + "```";
     }
 
@@ -857,7 +857,7 @@ public class DiscordCommands {
     public String listAssignableRoles(@Me GuildDB db, @Me Member member) {
         Map<Role, Set<Role>> assignable = db.getOrNull(GuildKey.ASSIGNABLE_ROLES);
         if (assignable == null || assignable.isEmpty()) {
-            return "No roles found. See `" +  "CM.self.create.cmd.toSlashMention()" + "`";
+            return "No roles found. See `" +  CM.role.assignable.create.cmd.toSlashMention() + "`";
         }
         assignable = new HashMap<>(assignable);
         if (!Roles.ADMIN.has(member)) {
@@ -889,8 +889,8 @@ public class DiscordCommands {
         StringBuilder result = new StringBuilder();
         result.append(GuildKey.ASSIGNABLE_ROLES.set(db, assignable)).append("\n");
 
-        result.append(StringMan.getString(requireRole) + " can now add/remove " + StringMan.getString(assignableRoles) + " via " + "CM.role.add.cmd.toSlashMention()" + " / " + "CM.role.remove.cmd.toSlashMention()" + "\n" +
-                "- To see a list of current mappings, use " + "CM.settings.info.cmd.create(GuildKey.ASSIGNABLE_ROLES.name(), null, null)" + "");
+        result.append(StringMan.getString(requireRole) + " can now add/remove " + StringMan.getString(assignableRoles) + " via " + CM.role.add.cmd.toSlashMention() + " / " + CM.role.assignable.remove.cmd.toSlashMention() + "\n" +
+                "- To see a list of current mappings, use " + CM.settings.info.cmd.create(GuildKey.ASSIGNABLE_ROLES.name(), null, null) + "");
         return result.toString();
     }
 
@@ -938,7 +938,7 @@ public class DiscordCommands {
             }
         }
         if (!canAssign) {
-            return "No permission to assign " + addRole + " (see: `listAssignableRoles` | ADMIN: see `" +  "CM.self.create.cmd.toSlashMention()" + "`)";
+            return "No permission to assign " + addRole + " (see: `listAssignableRoles` | ADMIN: see `" +  CM.role.assignable.create.cmd.toSlashMention() + "`)";
         }
         if (member.getRoles().contains(addRole)) {
             return member + " already has " + addRole;
@@ -972,7 +972,7 @@ public class DiscordCommands {
             }
         }
         if (!canAssign) {
-            return "No permission to assign " + addRole + " (see: `listAssignableRoles` | ADMIN: see `" +  "CM.self.create.cmd.toSlashMention()" + "`)";
+            return "No permission to assign " + addRole + " (see: `listAssignableRoles` | ADMIN: see `" +  CM.role.alias.set.cmd.toSlashMention() + "`)";
         }
         if (!member.getRoles().contains(addRole)) {
             return member + " does not have " + addRole;
@@ -1152,7 +1152,7 @@ public class DiscordCommands {
         }
 
         Auth auth = db.getMailAuth();
-        if (auth == null) throw new IllegalArgumentException("No guild auth set, please use " + "CM.credentials.login.cmd.toSlashMention()" + "");
+        if (auth == null) throw new IllegalArgumentException("No guild auth set, please use " + CM.credentials.login.cmd.toSlashMention() + "");
 
         io.send("Sending to " + messageMap.size() + " nations in " + alliances.size() + " alliances. Please wait.");
         List<String> response = new ArrayList<>();
@@ -1336,7 +1336,7 @@ public class DiscordCommands {
                     }
                 }
                 RateLimitUtil.queue(((GuildMessageChannel) channel).getManager().setName(closeChar + channel.getName()));
-                return "Marked channel as closed. Auto deletion in >24h. Use " + "CM.channel.open.cmd.toSlashMention()" + " to reopen. Use " + "CM.channel.close.current.cmd.toSlashMention()" + " again to force close";
+                return "Marked channel as closed. Auto deletion in >24h. Use " + CM.channel.open.cmd.toSlashMention() + " to reopen. Use " + CM.channel.close.cmd.toSlashMention() + " again to force close";
             }
 
             Category archiveCategory = db.getOrNull(GuildKey.ARCHIVE_CATEGORY);
@@ -1509,7 +1509,7 @@ public class DiscordCommands {
                 // buttons
                 IMessageBuilder msg = io.create().append("Options:");
                 for (String option : options) {
-                    msg.commandButton(CommandBehavior.DELETE_MESSAGE, "CM.copyPasta.cmd.create(option, null, null)", option);
+                    msg.commandButton(CommandBehavior.DELETE_MESSAGE, CM.copyPasta.cmd.create(option, null, null), option);
                 }
                 msg.send();
                 return null;
@@ -1562,7 +1562,7 @@ public class DiscordCommands {
         if (missingRoles != null && !missingRoles.isEmpty()) {
             throw new IllegalArgumentException("You do not have the required roles to use this command: `" + StringMan.join(missingRoles, ",") + "`");
         }
-        if (value == null) return "No message set for `" + key + "`. Plase use " + "CM.copyPasta.cmd.toSlashMention()" + "";
+        if (value == null) return "No message set for `" + key + "`. Plase use " + CM.copyPasta.cmd.toSlashMention() + "";
 
         value = placeholders.format(store, value);
 
@@ -1636,7 +1636,7 @@ public class DiscordCommands {
             response.append("\n- AutoNick disabled. To enable it use: " + GuildKey.AUTONICK.getCommandMention() + "");
         }
         else response.append("\n- AutoNick Mode: ").append(db.getOrNull(GuildKey.AUTONICK) + "");
-        if (Roles.REGISTERED.toRole(db) == null) response.append("\n- Please set a registered role: " + "CM.role.setAlias.cmd.create(Roles.REGISTERED.name(), null, null, null).toSlashCommand()" + "");
+        if (Roles.REGISTERED.toRole(db) == null) response.append("\n- Please set a registered role: " + CM.role.alias.set.cmd.create(Roles.REGISTERED.name(), null, null, null).toSlashCommand() + "");
         return response.toString();
     }
 
@@ -1658,7 +1658,7 @@ public class DiscordCommands {
             response.append("\n- AutoNick disabled. To enable it use: " + GuildKey.AUTONICK.getCommandMention() + "");
         }
         else response.append("\n- AutoNick Mode: ").append((Object) db.getOrNull(GuildKey.AUTONICK));
-        if (Roles.REGISTERED.toRole(db) == null) response.append("\n- Please set a registered role: " + "CM.role.setAlias.cmd.create(Roles.REGISTERED.name(), null, null, null).toSlashCommand()" + "");
+        if (Roles.REGISTERED.toRole(db) == null) response.append("\n- Please set a registered role: " + CM.role.alias.set.cmd.create(Roles.REGISTERED.name(), null, null, null).toSlashCommand() + "");
         return response.toString();
     }
 }

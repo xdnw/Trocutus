@@ -262,7 +262,7 @@ public abstract class GuildSetting<T> {
             Map<Long, Role> roleMap = db.getRoleMap(role);
             if (roleMap.isEmpty() || (!allowAARole && !roleMap.containsKey(0L))) {
                 if (throwException) {
-                    errors.add("Missing required role " + role.name() + " (see: " + "CM.role.setAlias.cmd.create(role.name(), null, null, null).toSlashCommand()" + ")");
+                    errors.add("Missing required role " + role.name() + " (see: " + "CM.role.alias.set.cmd.create(role.name(), null, null, null).toSlashCommand()" + ")");
                 } else {
                     return false;
                 }
