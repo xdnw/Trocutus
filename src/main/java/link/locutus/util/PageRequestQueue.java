@@ -15,27 +15,28 @@ public class PageRequestQueue {
     private int millisecondsPerPage;
     private PriorityQueue<PageRequestTask<?>> queue;
 
+    private long lastRun = 0;
 
     public PageRequestQueue(int millisecondsPerPage) {
         // ScheduledExecutorService service
         this.service = Executors.newScheduledThreadPool(1);
         this.millisecondsPerPage = millisecondsPerPage;
-        this.queue = new PriorityQueue<>((o1, o2) -> Integer.compare(o2.getPriority(), o1.getPriority()));
-        service.scheduleWithFixedDelay(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    PageRequestQueue.this.run();
-                } catch (Throwable e) {
-                    e.printStackTrace();
-                }
+        this.queue = new PriorityQueue<>(Comparator.comparingLong(PageRequestTask::getPriority));
+        service.scheduleWithFixedDelay(() -> {
+            long now = System.currentTimeMillis();
+            if (now - lastRun < millisecondsPerPage) return;
+            try {
+                PageRequestQueue.this.run();
+            } catch (Throwable e) {
+                e.printStackTrace();
             }
-        }, millisecondsPerPage, millisecondsPerPage, TimeUnit.MILLISECONDS);
+        }, 10, 10, TimeUnit.MILLISECONDS);
     }
 
     public void run() {
         PageRequestTask task = queue.poll();
         if (task != null) {
+            lastRun = System.currentTimeMillis();
             Supplier supplier = task.getTask();
             task.complete(supplier.get());
         }
@@ -49,9 +50,9 @@ public class PageRequestQueue {
 
     public static class PageRequestTask<T> extends CompletableFuture<T> {
         private final Supplier<T> task;
-        private final int priority;
+        private final long priority;
 
-        public PageRequestTask(Supplier<T> task, int priority) {
+        public PageRequestTask(Supplier<T> task, long priority) {
             this.task = task;
             this.priority = priority;
         }
@@ -60,7 +61,7 @@ public class PageRequestQueue {
             return task;
         }
 
-        public int getPriority() {
+        public long getPriority() {
             return priority;
         }
     }

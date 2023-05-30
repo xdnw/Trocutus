@@ -4,6 +4,7 @@ import com.google.common.eventbus.Subscribe;
 import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.impl.discord.DiscordChannelIO;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.war.DBAttack;
@@ -14,6 +15,7 @@ import link.locutus.core.event.attack.DefensiveAttackEvent;
 import link.locutus.core.event.attack.OffensiveAttackEvent;
 import link.locutus.core.event.spy.DefensiveSpyEvent;
 import link.locutus.core.event.spy.OffensiveSpyEvent;
+import link.locutus.core.event.spy.SpellCreateEvent;
 import link.locutus.util.DiscordUtil;
 import link.locutus.util.MathMan;
 import net.dv8tion.jda.api.entities.Role;
@@ -30,11 +32,17 @@ public class GuildHandler {
 
     public GuildHandler(GuildDB db) {
         this.db = db;
-
     }
 
     public boolean onMessageReceived(MessageReceivedEvent event) {
         return true;
+    }
+
+    @Subscribe
+    public void SpellCreateEvent(SpellCreateEvent event) {
+        AttackOrSpell spell = event.getSpell();
+
+//        boolean defensive =
     }
 
     @Subscribe
@@ -98,7 +106,7 @@ public class GuildHandler {
         body.append("## Total Units (estimate)\n");
         HeroType attHero = attack.getAttacker() == null ? HeroType.VISIONARY : attack.getAttacker().getHero();
         HeroType defHero = attack.getDefender() == null ? HeroType.VISIONARY : attack.getDefender().getHero();
-        Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> units = MilitaryUnit.getUnits(attack.getCost(true), attack.getCost(false), attHero, defHero, true, true);
+        Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> units = MilitaryUnit.getUnits(attack.getCost(true), attack.getCost(false), attHero, defHero, true, attack.victory, true);
         Map<MilitaryUnit, Long> attUnits = units.getKey();
         Map<MilitaryUnit, Long> defUnits = units.getValue();
         int attAttack = MilitaryUnit.getAttack(attUnits, attHero);
@@ -111,7 +119,7 @@ public class GuildHandler {
                 .append(String.format("%5s", attUnits.getOrDefault(MilitaryUnit.ARCHER, 0L))).append(" " + cavalryChar).append(" | ")
                 .append(String.format("%4s", attUnits.getOrDefault(MilitaryUnit.ELITE, 0L))).append(" " + eliteChar)
                 .append("```\n");
-        body.append("**attacker** (attack: " + defAttack + " | defense:" + defDefense + ")\n```");
+        body.append("**defender** (attack: " + defAttack + " | defense:" + defDefense + ")\n```");
         body.append(String.format("%6s", defUnits.getOrDefault(MilitaryUnit.SOLDIER, 0L))).append(" " + soldierChar).append(" | ")
                 .append(String.format("%5s", defUnits.getOrDefault(MilitaryUnit.CAVALRY, 0L))).append(" " + archerChar).append(" | ")
                 .append(String.format("%5s", defUnits.getOrDefault(MilitaryUnit.ARCHER, 0L))).append(" " + cavalryChar).append(" | ")

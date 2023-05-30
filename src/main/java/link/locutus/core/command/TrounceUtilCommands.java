@@ -77,17 +77,16 @@ public class TrounceUtilCommands {
 
             double losses = strength * 3;
             double loot = 88 * land * 0.2;
-            double landLoot = TrounceUtil.landLoot(my_score, land);
-            double landValue = TrounceUtil.getFeyDPA(land) * landLoot;
+            double landLoot = TrounceUtil.landLoot(my_score, land, true);
+            double landValue = 2000 * landLoot;
             double netBoth = loot + landLoot * landValue  - losses;
-            double netLand = landLoot * landValue - losses;
             double netGold = loot - losses;
             if (netBoth > optimalBothValue) {
                 optimalBothValue = netBoth;
                 optimalBothFey = land;
             }
-            if (netLand > optimalLandValue) {
-                optimalLandValue = netLand;
+            if (landLoot > optimalLandValue) {
+                optimalLandValue = landLoot;
                 optimalLandFey = land;
             }
             if (netGold > optimalGoldValue) {
@@ -96,13 +95,13 @@ public class TrounceUtilCommands {
             }
         }
 
-        double fey = TrounceUtil.getFeyLand(my_score, my_attack);
+        double fey = TrounceUtil.getFeyLand(my_attack);
 
         StringBuilder response = new StringBuilder();
         response.append("Your Land: " + MathMan.format(my_score) + " | Your Attack: " + MathMan.format(my_attack) + "\n");
         response.append("Optimal fey targets:\n");
         response.append("- land+gold: " + MathMan.format(optimalBothFey) + " land -> net $" + MathMan.format((long) optimalBothValue) + "\n");
-        response.append("- land: " + MathMan.format(optimalLandFey) + " land -> net $" + MathMan.format((long) optimalLandValue) + "\n");
+        response.append("- land: " + MathMan.format(optimalLandFey) + " land -> net " + MathMan.format((long) optimalLandValue) + "\n");
         response.append("- gold: " + MathMan.format(optimalGoldFey) + " land -> net $" + MathMan.format((long) optimalGoldValue) + "\n");
         return response.toString();
     }
@@ -110,19 +109,39 @@ public class TrounceUtilCommands {
     @Command
     public String fey_top(DBKingdom attacker) {
         int my_score = attacker.getScore();
+        int minScore = attacker.getAttackMinRange();
         int maxScore = attacker.getAttackMaxRange();
+        int maxLand = 0;
+        int maxFeyScore = 0;
+        for (int score = minScore; score <= maxScore; score++) {
+            int land = TrounceUtil.landLoot(my_score, score, true);
+            if (land > maxLand) {
+                maxLand = land;
+                maxFeyScore = score;
+            }
+        }
+
         double dpa = TrounceUtil.getFeyDPA(maxScore);
         int defense = (int) (dpa * maxScore);
         StringBuilder response = new StringBuilder();
         response.append("Your Land: " + MathMan.format(my_score) + "\n");
         response.append("Max Fey:\n");
         response.append("- land: " + MathMan.format(maxScore) + " land -> " + MathMan.format(defense) + " defense\n");
+        if (maxScore > maxFeyScore) {
+            response.append("Max land loot fey @" + MathMan.format(maxFeyScore) + " score. -> Strength: " + TrounceUtil.getFeyDPA(maxFeyScore) * maxFeyScore);
+        }
         return response.toString();
     }
 
     @Command
-    public String fey_land(int myLand, int attack) {
-        double land = TrounceUtil.getFeyLand(myLand, attack);
+    public String fey_land(int attack) {
+        double land = TrounceUtil.getFeyLand(attack);
         return "Your army is on par with fey of approx. ~" + MathMan.format(land) + " land";
+    }
+
+    @Command
+    public String fey_strength(int land) {
+        double dpa = TrounceUtil.getFeyDPA(land) * land;
+        return "Fey with " + MathMan.format(land) + " land has strength of ~" + MathMan.format(dpa) + " attack";
     }
 }

@@ -102,14 +102,11 @@ public abstract class AbstractAttackOrSpell implements AttackOrSpell {
         return alliance == null ? "kingdom:" + defender_id : alliance.getName();
     }
 
-
     @Override
     public Map<MilitaryUnit, Long> getCost(boolean isAttacker) {
         if (!isAttacker) return new HashMap<>();
         Map<MilitaryUnit, Long> result = new HashMap<>();
         result.putAll(getType().getDefaultCost());
-        result.put(MilitaryUnit.MANA, 200L);
-        result.put(MilitaryUnit.EXP, -10L);
         return result;
     }
 }

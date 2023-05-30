@@ -1071,9 +1071,9 @@ public class DiscordCommands {
         IMessageBuilder msg = channel.create();
         sheet.attach(msg, embed, false, 0);
         embed.append("\nPress `confirm` to confirm");
-//        CM.mail.sheet cmd = CM.mail.sheet.cmd.create(sheet.getURL(), null);
+        CM.mail.sheet cmd = CM.mail.sheet.cmd.create(sheet.getURL(), null);
 //
-//        msg.confirmation(title, embed.toString(), cmd).send(); <--- todo that too
+        msg.confirmation(title, embed.toString(), cmd).send();
 
         if (errorMsgs.isEmpty()) return null;
         return "Errors\n- " + StringMan.join(errorMsgs, "\n- ");

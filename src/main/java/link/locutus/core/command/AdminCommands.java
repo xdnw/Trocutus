@@ -7,6 +7,7 @@ import link.locutus.command.binding.annotation.Me;
 import link.locutus.command.binding.annotation.Switch;
 import link.locutus.command.command.IMessageIO;
 import link.locutus.command.impl.discord.permission.RolePermission;
+import link.locutus.core.api.alliance.AllianceMetric;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -15,6 +16,7 @@ import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.db.guild.key.GuildSetting;
+import link.locutus.util.PagePriority;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
 import link.locutus.util.TimeUtil;
@@ -33,6 +35,13 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class AdminCommands {
+
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
+    public String syncMetrics() {
+        AllianceMetric.update();
+        return "Done!";
+    }
     @Command(aliases = {"setloot"})
     @RolePermission(value = Roles.ADMIN, root = true)
     public String setUnits(@Me IMessageIO channel, @Me Map<DBRealm, DBKingdom> me, DBKingdom nation, Map<MilitaryUnit, Long> units, int attack, int defense) {
@@ -97,7 +106,7 @@ public class AdminCommands {
     @Command
     public String sync(int realm, String name) throws IOException {
         long start = System.currentTimeMillis();
-        Trocutus.imp().getScraper().updateKingdom(realm, name);
+        Trocutus.imp().getScraper().updateKingdom(PagePriority.FETCH_SELF, realm, name);
         return "Updated kingdom in " + (System.currentTimeMillis() - start) + "ms";
     }
     @RolePermission(value = Roles.ADMIN, root = true)
@@ -127,7 +136,7 @@ public class AdminCommands {
         for (DBRealm realm : Trocutus.imp().getDB().getRealms().values()) {
             for (DBKingdom kingdom : Trocutus.imp().getScraper().updateAllianceKingdoms(realm.getId())) {
                 if  (updateMissing) {
-                    Trocutus.imp().getScraper().updateKingdom(kingdom.getRealm_id(), kingdom.getSlug());
+                    Trocutus.imp().getScraper().updateKingdom(PagePriority.FETCH_SELF, kingdom.getRealm_id(), kingdom.getSlug());
                 }
             }
 

@@ -1203,10 +1203,6 @@ public class TrouncedDB extends DBMain {
         }
     };
     public int[] saveKingdoms(List<DBKingdom> toSave) {
-        if (toSave.stream().anyMatch(f -> f.getSlug().equalsIgnoreCase("vargstad"))) {
-            System.out.println("saving vargstad");
-            new Exception().printStackTrace();
-        }
         int[] result;
         String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -1850,7 +1846,7 @@ public class TrouncedDB extends DBMain {
     public Set<Long> getActivityByDay(int nationId, long minTurn) {
         Set<Long> result = new LinkedHashSet<>();
         for (long turn : getActivity(nationId, minTurn)) {
-            result.add(turn / 12);
+            result.add(turn / 24);
         }
         return result;
     }

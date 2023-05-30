@@ -3,6 +3,7 @@ package link.locutus.core.db.guild.key;
 import com.google.gson.reflect.TypeToken;
 import link.locutus.Trocutus;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.command.CM;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -179,8 +180,8 @@ public abstract class GuildSetting<T> {
     public String set(GuildDB db, T value) {
         String readableStr = toReadableString(value);
         db.setInfo(this, value);
-        return "Set `" + name() + "` to `" + readableStr + "`\n" + "";
-//                "Delete with " + CM.settings.delete.cmd.create(name);
+        return "Set `" + name() + "` to `" + readableStr + "`\n" + "" +
+                "Delete with " + CM.settings.delete.cmd.create(name);
     }
 
     public T parse(GuildDB db, String input) {
@@ -249,7 +250,7 @@ public abstract class GuildSetting<T> {
         for (Coalition coalition : requiresCoalition) {
             if (db.getCoalition(coalition).isEmpty()) {
                 if (throwException) {
-                    errors.add("Missing required coalition " + coalition.name() + " (see: " + "CM.coalition.create.cmd.create(null, coalition.name()).toSlashCommand()" + ")");
+                    errors.add("Missing required coalition " + coalition.name() + " (see: " + CM.coalition.create.cmd.create(null, coalition.name()).toSlashCommand() + ")");
                 } else {
                     return false;
                 }
@@ -262,7 +263,7 @@ public abstract class GuildSetting<T> {
             Map<Long, Role> roleMap = db.getRoleMap(role);
             if (roleMap.isEmpty() || (!allowAARole && !roleMap.containsKey(0L))) {
                 if (throwException) {
-                    errors.add("Missing required role " + role.name() + " (see: " + "CM.role.alias.set.cmd.create(role.name(), null, null, null).toSlashCommand()" + ")");
+                    errors.add("Missing required role " + role.name() + " (see: " + CM.role.alias.set.cmd.create(role.name(), null, null, null).toSlashCommand() + ")");
                 } else {
                     return false;
                 }
@@ -364,7 +365,7 @@ public abstract class GuildSetting<T> {
     public GuildSetting<T> requiresNot(GuildSetting setting) {
         requiresFunction.add((db, throwError) -> {
             if (setting.getOrNull(db) != null) {
-                throw new IllegalArgumentException("Cannot be used with " + setting.name() + " set. Unset via " + "CM.settings.info.cmd.toSlashMention()");
+                throw new IllegalArgumentException("Cannot be used with " + setting.name() + " set. Unset via " + CM.settings.info.cmd.toSlashMention());
             }
             return true;
         });
@@ -411,7 +412,7 @@ public abstract class GuildSetting<T> {
         if (owner != null && owner.getIdLong() != Settings.INSTANCE.ADMIN_USER_ID) {
             Map<DBRealm, DBKingdom> kingdoms = DBKingdom.getFromUser(owner.getUser());
             if (kingdoms == null || kingdoms.isEmpty()) {
-                throw new IllegalArgumentException("The owner of this server (" + owner.getEffectiveName() + ") is not registered with the bot (see: " + "CM.register.cmd.toSlashMention()" + ")");
+                throw new IllegalArgumentException("The owner of this server (" + owner.getEffectiveName() + ") is not registered with the bot (see: " + CM.register.cmd.toSlashMention() + ")");
             }
             long mostRecent = kingdoms.values().stream().map(DBKingdom::getLast_active).max(Long::compareTo).orElse(0L);
             // get max
@@ -451,7 +452,7 @@ public abstract class GuildSetting<T> {
     public T allowedAndValidate(GuildDB db, User user, T value) {
         Map<DBRealm, DBKingdom> kingdoms = DBKingdom.getFromUser(user);
         if ((kingdoms == null || kingdoms.isEmpty()) && user.getIdLong() != Settings.INSTANCE.ADMIN_USER_ID) {
-            throw new IllegalArgumentException("You are not registered with the bot (see: " + "CM.register.cmd.toSlashMention()" + ")");
+            throw new IllegalArgumentException("You are not registered with the bot (see: " + CM.register.cmd.toSlashMention() + ")");
         }
         if (!allowed(db, true)) {
             throw new IllegalArgumentException("This setting is not allowed in this server (you may be missing some prerequisite settings)");
@@ -479,7 +480,7 @@ public abstract class GuildSetting<T> {
                 }
                 if (!hasValidAllies) {
                     if (db.getCoalition(Coalition.ALLIES).isEmpty()) {
-                        throw new IllegalArgumentException("No valid alliance or `" + Coalition.ALLIES + "` coalition exists. See: " + GuildKey.ALLIANCE_ID.getCommandMention() + " or " + "CM.coalition.create.cmd.toSlashMention()");
+                        throw new IllegalArgumentException("No valid alliance or `" + Coalition.ALLIES + "` coalition exists. See: " + GuildKey.ALLIANCE_ID.getCommandMention() + " or " + CM.coalition.create.cmd.toSlashMention());
                     }
                 }
             }

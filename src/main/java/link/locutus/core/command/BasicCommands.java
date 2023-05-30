@@ -163,7 +163,7 @@ public class BasicCommands {
             result.append(kingdom.toMarkdown(myName, true));
 
             result.append("\n");
-            result.append(myKingdom.getInfoRowMarkdown(myName, true, false, false));
+            result.append(kingdom.getInfoRowMarkdown(myName, true, false, false));
 
             io.create().embed(kingdom.getName(), result.toString()).send();
         } else {
@@ -259,7 +259,7 @@ public class BasicCommands {
     }
 
     @Command
-    public String raid(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults,  @Switch("g") boolean sortGold, @Switch("l") boolean sortLand, @Switch("i") boolean ignoreLosses, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean includeWarUnitEstimate) throws IOException {
+    public String raid(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults,  @Switch("g") boolean sortGold, @Switch("l") boolean sortLand, @Switch("i") boolean ignoreLosses, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean excludeWarUnitEstimate) throws IOException {
         if (sortGold && sortLand) {
             sortGold = false;
             sortLand = false;
@@ -292,8 +292,7 @@ public class BasicCommands {
             if (spy == null) continue;
             if (spy.defense > memberInfo.stats.attack) continue;
             double goldLoot =  (long) (spy.gold * 0.2);
-            double defenderRatio = kingdom.getTotal_land() / (double) memberInfo.land.total;
-            double landLoot = 0.1 * kingdom.getTotal_land() * (Math.pow(defenderRatio, 2.2));
+            double landLoot = TrounceUtil.landLoot(memberInfo.land.total, kingdom.getTotal_land(), false);
 
             double losses = ignoreLosses ? 0 : spy.defense * 3;
 
@@ -323,7 +322,7 @@ public class BasicCommands {
         for (int i = 0; i < numResults; i++) {
             Map.Entry<DBKingdom, Long> entry = values.get(i);
             DBKingdom kingdom = entry.getKey();
-            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), includeWarUnitEstimate));
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate));
             double value = entry.getValue();
             response.append("Worth: `$" + MathMan.format((long) value) + "` (" + types + ")\n\n");
         }
@@ -344,17 +343,16 @@ public class BasicCommands {
 
             double losses = strength * 3;
             double loot = 88 * land * 0.2;
-            double landLoot = TrounceUtil.landLoot(memberInfo.land.total, land);
+            double landLoot = TrounceUtil.landLoot(memberInfo.land.total, land, true);
             double landValue = TrounceUtil.getLandValue(myKingdom.getTotal_land(), (int) landLoot);
             double netBoth = loot + landValue - losses;
-            double netLand = landValue - losses;
             double netGold = loot - losses;
             if (netBoth > optimalBothValue) {
                 optimalBothValue = netBoth;
                 optimalBothFey = land;
             }
-            if (netLand > optimalLandValue) {
-                optimalLandValue = netLand;
+            if (landValue > optimalLandValue) {
+                optimalLandValue = landValue;
                 optimalLandFey = land;
             }
             if (netGold > optimalGoldValue) {
@@ -363,7 +361,7 @@ public class BasicCommands {
             }
         }
 
-        double fey = TrounceUtil.getFeyLand(myKingdom.getTotal_land(), memberInfo.stats.attack);
+        double fey = TrounceUtil.getFeyLand(memberInfo.stats.attack);
 
         response.append("\n`note: Your army is on par with fey of approx. ~" + MathMan.format(fey) + " land`");
         response.append("\n`note: Optimal fey targets`");
@@ -379,7 +377,7 @@ public class BasicCommands {
     }
 
     @Command
-    public String spyop(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean includeWarUnitEstimate) throws IOException {
+    public String spyop(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults, @Switch("a") boolean noAlliance, @Switch("i") @Timediff Long inactive, @Switch("l") boolean skipSpiedAfterLogin, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean excludeWarUnitEstimate) throws IOException {
         DBKingdom myKingdom = me.get(realm);
         if (myKingdom == null) return "You are not in a kingdom in this realm";
 
@@ -451,7 +449,7 @@ public class BasicCommands {
             Map.Entry<DBKingdom, Long> result = results.get(i);
             DBKingdom kingdom = result.getKey();
 
-            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), includeWarUnitEstimate));
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate));
             response.append("\n\n");
         }
 

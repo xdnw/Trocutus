@@ -36,7 +36,7 @@ public class AllianceListener {
                     AllianceMetric.update();
                 }
             }
-        }, 60, 1, TimeUnit.MINUTES);
+        }, 1, 1, TimeUnit.MINUTES);
     }
 
     @Subscribe

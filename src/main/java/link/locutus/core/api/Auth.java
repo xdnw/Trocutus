@@ -3,6 +3,7 @@ package link.locutus.core.api;
 import link.locutus.Trocutus;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.util.FileUtil;
+import link.locutus.util.PagePriority;
 import link.locutus.util.TrounceUtil;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -11,6 +12,9 @@ import java.io.IOException;
 import java.net.CookieManager;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.function.Function;
 
 public class Auth {
     private final String password;
@@ -38,24 +42,12 @@ public class Auth {
         return null;
     }
 
-    public synchronized String readStringFromURL(String urlStr, Map<String, String> arguments, boolean post) throws IOException {
+    public synchronized CompletableFuture<String> readStringFromURL(int priority, String urlStr, Map<String, String> arguments, boolean post) throws IOException {
         synchronized (this)
         {
             login(false);
-            String result = FileUtil.readStringFromURL(urlStr, arguments, post, msCookieManager, i -> {});
-            if (result.contains("<!--Logged Out-->")) {
-                logout();
-                msCookieManager = new CookieManager();
-                login(true);
-                result = FileUtil.readStringFromURL(urlStr, arguments, post, msCookieManager, i -> {});
-                if (result.contains("<!--Logged Out-->")) {
-                    throw new IllegalArgumentException("Failed to login to Trounced");
-                }
-            }
-            if (result.toLowerCase().contains("authenticate your request")) {
-                new Exception().printStackTrace();
-            }
-            return result;
+            return FileUtil.readStringFromURL(priority, urlStr, arguments, post, msCookieManager, i -> {});
+            // todo check if logged out
         }
     }
 
@@ -65,7 +57,7 @@ public class Auth {
         synchronized (this)
         {
             // load a random page to get the csrf1
-            String csrf1 = FileUtil.readStringFromURL("https://trounced.net/sanctum/csrf-cookie", (byte[]) null, FileUtil.RequestType.GET, this.getCookieManager(), i -> {});
+            String csrf1 = FileUtil.get(FileUtil.readStringFromURL(PagePriority.LOGIN.ordinal(), "https://trounced.net/sanctum/csrf-cookie", (byte[]) null, FileUtil.RequestType.GET, this.getCookieManager(), i -> {}));
 
             Map<String, String> userPass = new HashMap<>();
             userPass.put("email", this.getUsername());
@@ -73,7 +65,7 @@ public class Auth {
             userPass.put("remember", "on");
             String url = "https://trounced.net/login";
 
-            String loginResult = FileUtil.readStringFromURL(url, userPass, this.getCookieManager());
+            String loginResult = FileUtil.get(FileUtil.readStringFromURL(PagePriority.LOGIN.ordinal(), url, userPass, this.getCookieManager()));
             if (!loginResult.contains("Redirecting to")) {
                 Document dom = Jsoup.parse(loginResult);
                 String userTrunc = getUsername();
@@ -117,7 +109,7 @@ public class Auth {
         data.put("destination_id", String.valueOf(kingdom.getId()));
         data.put("subject", subject);
         data.put("body", message);
-        String result = FileUtil.readStringFromURL(url, data, this.getCookieManager());
+        String result = FileUtil.get(FileUtil.readStringFromURL(PagePriority.MAIL.ordinal(), url, data, this.getCookieManager()));
         Document dom = Jsoup.parse(result);
         return TrounceUtil.getAlert(dom);
     }

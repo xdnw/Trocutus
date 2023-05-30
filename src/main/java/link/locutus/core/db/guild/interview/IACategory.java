@@ -159,7 +159,7 @@ public class IACategory {
     }
     public GuildMessageChannel getOrCreate(DBKingdom kingdom, boolean throwError) {
         User user = kingdom.getUser();
-        if (user == null) throw new IllegalArgumentException("Please use `/register/`");
+        if (user == null) throw new IllegalArgumentException("Please use " + CM.register.cmd.toSlashMention());
         Member member = guild.getMember(user);
         if (member == null) {
             try {
@@ -396,7 +396,7 @@ public class IACategory {
 
                     body.append("\n\nPress `" + emoji + "` to delete");
                     output.create().embed( "Interview not assigned to a member", body.toString())
-//                                    .commandButton(CM.channel.delete.current.cmd.create(channel.getAsMention()), emoji)
+                                    .commandButton(CM.channel.delete.cmd.create(channel.getAsMention()), emoji)
                                             .send();
 
                     if (nation != null && ((nation.getActive_m() > 7200) || (nation.getActive_m() > 2880 && (nation.getPosition().ordinal() <= 1 || !alliance.contains(nation.getAlliance_id()))))) {
@@ -675,7 +675,7 @@ public class IACategory {
                 return false;
             }
         },
-        SPIES("hasn't used " + CM.war.find.intel.cmd.toSlashCommand() + " and " + "CM.spy.find.intel.cmd.toSlashCommand()" + " (and posted spy report)") {
+        SPIES("hasn't used " + CM.war.find.intel.cmd.toSlashCommand() + " and " + CM.war.find.intel.cmd.toSlashCommand() + "") {
             @Override
             public boolean matches(IACategory iaCat, GuildDB db, Set<Integer> allianceIds, GuildMessageChannel channel, IAChannel iaChan) {
                 if (iaChan == null) return false;

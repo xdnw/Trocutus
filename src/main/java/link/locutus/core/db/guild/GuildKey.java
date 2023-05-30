@@ -24,6 +24,8 @@ import link.locutus.core.db.guild.key.GuildEnumSetting;
 import link.locutus.core.db.guild.key.GuildIntegerSetting;
 import link.locutus.core.db.guild.key.GuildSetting;
 import link.locutus.core.db.guild.key.GuildSettingCategory;
+import link.locutus.util.FileUtil;
+import link.locutus.util.PagePriority;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
@@ -132,7 +134,7 @@ public class GuildKey {
                             DBKingdom kingdom = auth.getKingdom(alliance.getRealm_id());
                             String url = alliance.getUrl(kingdom.getName());
 
-                            String content = auth.readStringFromURL(url, Collections.emptyMap(), false);
+                            String content = FileUtil.get(auth.readStringFromURL(PagePriority.GUILD_SETTING.ordinal(), url, Collections.emptyMap(), false));
 
                             String idStr = db.getGuild().getId();
 
@@ -293,8 +295,8 @@ public class GuildKey {
         }
         @Override
         public String help() {
-            return "Options: " + StringMan.getString(AutoNickOption.values()) + "\n" + "";
-//                    "See also: " + CM.role.clearNicks.cmd.toSlashMention();
+            return "Options: " + StringMan.getString(AutoNickOption.values()) + "\n" + "" +
+                    "See also: " + CM.role.auto.clearNicks.cmd.toSlashMention();
         }
     };
     public static GuildSetting<AutoRoleOption> AUTOROLE = new GuildEnumSetting<AutoRoleOption>(GuildSettingCategory.ROLE, AutoRoleOption.class) {
@@ -308,8 +310,8 @@ public class GuildKey {
         public String help() {
             return "Options: " + StringMan.getString(AutoRoleOption.values()) + "\n" +
                     "See also:\n" +
-//                    "- " + CM.coalition.create.cmd.create(null, Coalition.MASKED_ALLIANCES.name()) + "\n" +
-//                    "- " + CM.role.clearAllianceRoles.cmd.toSlashMention() + "\n" +
+                    "- " + CM.coalition.create.cmd.create(null, Coalition.MASKED_ALLIANCES.name()) + "\n" +
+                    "- " + CM.role.auto.clearAllianceRoles.cmd.toSlashMention() + "\n" +
                     "- " + AUTOROLE_ALLIANCE_RANK.getCommandMention() + "\n" +
                     "- " + AUTOROLE_TOP_X.getCommandMention();
         }
@@ -564,7 +566,7 @@ public class GuildKey {
 
         @Override
         public String help() {
-            return "Map roles that can be assigned (or removed). See `";// + CM.self.create.cmd.toSlashMention() + "` " + CM.role.removeAssignableRole.cmd.toSlashMention() + " " + CM.role.add.cmd.toSlashMention() + " " + CM.role.remove.cmd.toSlashMention();
+            return "Map roles that can be assigned (or removed). See `" + CM.role.assignable.create.cmd.toSlashMention() + "` " + CM.role.assignable.unregister.cmd.toSlashMention() + " " + CM.role.add.cmd.toSlashMention() + " " + CM.role.assignable.remove.cmd.toSlashMention();
         }
     };
 

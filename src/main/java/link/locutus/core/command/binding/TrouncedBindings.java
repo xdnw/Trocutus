@@ -155,7 +155,7 @@ public class TrouncedBindings extends BindingHelper {
     @Me
     @Binding
     public Map<DBRealm, DBKingdom> me() {
-        throw new UnsupportedOperationException("No Map<DBRealm, DBKingdom> binding provided in command locals");
+        throw new UnsupportedOperationException("No registered kingdom found in command locals. See: " + CM.register.cmd.toSlashMention());
     }
 
     @Me

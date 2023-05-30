@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 
 public class WarCommands {
     @Command
-    public String war(@Me GuildDB db, @Me Map<DBRealm, DBKingdom> me, int maxAttackAlert, int maxSpellAlert, @Default Set<DBKingdom> enemies, @Switch("n") @Default("15") int numResults, @Switch("s") boolean includeStronger, @Switch("w") boolean includeWarUnitEstimate) {
+    public String war(@Me GuildDB db, @Me Map<DBRealm, DBKingdom> me, int maxAttackAlert, int maxSpellAlert, @Default Set<DBKingdom> enemies, @Switch("n") @Default("15") int numResults, @Switch("s") boolean includeStronger, @Switch("w") boolean excludeWarUnitEstimate) {
         if (enemies == null) {
             enemies = new HashSet<>();
             Set<Integer> enemyIds = db.getCoalition(Coalition.ENEMIES);
@@ -99,7 +99,7 @@ public class WarCommands {
         for (int i = 0; i < numResults; i++) {
             Map.Entry<DBKingdom, Integer> result = enemyStrength.get(i);
             DBKingdom kingdom = result.getKey();
-            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), includeWarUnitEstimate));
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate));
             response.append("\n\n");
         }
         if (errors.length() > 0) {

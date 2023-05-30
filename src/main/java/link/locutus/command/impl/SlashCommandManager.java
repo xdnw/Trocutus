@@ -74,7 +74,6 @@ public class SlashCommandManager extends ListenerAdapter {
         CHANNEL_TYPES.put(GuildMessageChannel.class, Collections.singleton(ChannelType.TEXT));
         CHANNEL_TYPES.put(PrivateChannel.class, Collections.singleton(ChannelType.PRIVATE));
         CHANNEL_TYPES.put(VoiceChannel.class, Collections.singleton(ChannelType.VOICE));
-//        channelTypes.put(TODO unused, ChannelType.GROUP);
         CHANNEL_TYPES.put(Category.class, Collections.singleton(ChannelType.CATEGORY));
         CHANNEL_TYPES.put(NewsChannel.class, Collections.singleton(ChannelType.NEWS));
         CHANNEL_TYPES.put(StageChannel.class, Collections.singleton(ChannelType.STAGE));

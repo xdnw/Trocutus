@@ -2,6 +2,7 @@ package link.locutus.core.db.guild.role;
 
 import link.locutus.Trocutus;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.command.CM;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
@@ -405,7 +406,7 @@ public class AutoRoleTask implements IAutoRoleTask {
         }
         if (!isRegistered && !autoAll) {
             if (registeredRole == null) {
-                output.accept("No registered role exists. Please create one on discord, then use " + "CM.role.alias.set.cmd.create(Roles.REGISTERED.name(), null, null, null)" + "");
+                output.accept("No registered role exists. Please create one on discord, then use " + CM.role.alias.set.cmd.create(Roles.REGISTERED.name(), null, null, null) + "");
             } else {
                 output.accept(member.getEffectiveName() + " is NOT registered");
             }

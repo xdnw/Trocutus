@@ -1,8 +1,11 @@
 package link.locutus.core.api.alliance;
 
 import link.locutus.Trocutus;
+import link.locutus.core.api.game.MilitaryUnit;
+import link.locutus.core.db.entities.WarParser;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.kingdom.KingdomOrAlliance;
 import link.locutus.util.TimeUtil;
 import link.locutus.util.builder.table.TimeNumericTable;
 
@@ -20,7 +23,7 @@ import java.util.stream.Collectors;
 public enum AllianceMetric {
     LAND(false) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             Set<DBKingdom> nations = alliance.getKingdoms(true, 0, true);
             double totalLand = 0;
             for (DBKingdom nation : nations) {
@@ -31,7 +34,7 @@ public enum AllianceMetric {
     },
     LAND_AVG(true) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             Set<DBKingdom> nations = alliance.getKingdoms(true, 0, true);
             double totalLand = 0;
             int num = 0;
@@ -44,42 +47,127 @@ public enum AllianceMetric {
     },
     MEMBERS(false) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             return alliance.getKingdoms(true, 0, true).size();
         }
     },
     MEMBERS_ACTIVE_1W(false) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             return alliance.getKingdoms(true, 1440 * 7, true).size();
         }
     },
     VM(false) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             return alliance.getKingdoms().stream().filter(f -> f.isVacation() && f.getPosition().ordinal() > Rank.APPLICANT.ordinal()).count();
         }
     },
     INACTIVE_1W(false) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             return alliance.getKingdoms().stream().filter(f -> f.isVacation() == false && f.getPosition().ordinal() > Rank.APPLICANT.ordinal() && f.getActive_m() > 1440 * 7).count();
         }
     },
     VM_PCT(true) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             Set<DBKingdom> nations = alliance.getKingdoms();
             return nations.stream().filter(f -> f.isVacation() && f.getPosition().ordinal() > Rank.APPLICANT.ordinal()).count() / (double) nations.size();
         }
     },
     INACTIVE_PCT(true) {
         @Override
-        public double apply(DBAlliance alliance) {
+        public double apply(DBAlliance alliance, long turn) {
             Set<DBKingdom> nations = alliance.getKingdoms();
             return nations.stream().filter(f -> f.getActive_m() > 1440 * 7 && f.getPosition().ordinal() > Rank.APPLICANT.ordinal()).count() / (double) nations.size();
         }
     },
+
+    ATTACK(false) {
+        @Override
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToLong(DBKingdom::getAttackStrength).sum();
+        }
+    },
+
+    ATTACK_AVG(false) {
+        @Override
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToLong(DBKingdom::getAttackStrength).average().orElse(0);
+        }
+    },
+
+    DEFENSE(false) {
+        @Override
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToLong(DBKingdom::getDefenseStrength).sum();
+        }
+    },
+
+    DEFENSE_AVG(false) {
+        @Override
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToLong(DBKingdom::getDefenseStrength).average().orElse(0);
+        }
+    },
+
+    DAILY_STRENGTH_KILLS(false) {
+        @Override
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn( + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getStrengthLosses(false);
+        }
+    },
+
+    DAILY_STRENGTH_LOSSES(false) {
+        @Override
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn( + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getStrengthLosses(true);
+        }
+    },
+
+    DAILY_STRENGTH_NET(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn( + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getStrengthLosses(false) - parser.getStrengthLosses(true);
+        }
+    },
+
+    DAILY_LAND_GAIN_ABS(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn( + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getLandGain(true, true, false);
+        }
+    },
+
+    DAILY_LAND_LOSS_ABS(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn( + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getLandGain(true, false, true);
+        }
+    },
+
+    DAILY_LAND_NET(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn( + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getLandGain(true, true, true);
+        }
+    },
+
     ;
 
     private static Map.Entry<Integer, double[]> aaRevenueCache;
@@ -107,13 +195,24 @@ public enum AllianceMetric {
         }
     }
 
-    public double apply(DBAlliance alliance) {
-        return apply(alliance, TimeUtil.getTurn());
+    public static synchronized void updateLegacy() {
+        long currentTurn = TimeUtil.getTurn();
+        long startTurn = currentTurn - 400;
+        List<AllianceMetric> toUpdateLegacy = Arrays.asList(
+                ATTACK, DEFENSE, DAILY_STRENGTH_KILLS, DAILY_STRENGTH_LOSSES, DAILY_STRENGTH_NET, DAILY_LAND_GAIN_ABS, DAILY_LAND_LOSS_ABS, DAILY_LAND_NET
+        );
+        for (long turn = startTurn; turn < currentTurn; turn++) {
+            for (AllianceMetric metric : toUpdateLegacy) {
+                for (DBAlliance alliance : Trocutus.imp().getDB().getAlliances()) {
+                    System.out.println("Updating " + alliance.getName() + " " + metric + " " + turn + " " + TimeUtil.getTurn());
+                    double value = metric.apply(alliance, turn);
+                    Trocutus.imp().getDB().addMetric(alliance, metric, turn, value);
+                }
+            }
+        }
     }
 
-    public double apply(DBAlliance alliance, long turn) {
-        return apply(alliance);
-    }
+    public abstract double apply(DBAlliance alliance, long turn);
 
     public static TimeNumericTable generateTable(AllianceMetric metric, long cutoffTurn, Collection<String> coalitionNames, Set<DBAlliance>... coalitions) {
         return generateTable(metric, cutoffTurn, TimeUtil.getTurn(), coalitionNames, coalitions);

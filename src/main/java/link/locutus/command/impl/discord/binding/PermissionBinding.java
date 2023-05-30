@@ -32,7 +32,7 @@ public class PermissionBinding extends BindingHelper {
     @Binding(value = "Must be used in a guild registered to a valid in-game alliance")
     @IsAlliance
     public boolean checkAlliance(@Me GuildDB db, IsAlliance perm) {
-        if (db.getAlliances().isEmpty()) throw new IllegalArgumentException(db.getGuild() + " is not a valid alliance. See: " + GuildKey.ALLIANCE_ID.getCommandMention() + "");
+        if (!db.isValidAlliance()) throw new IllegalArgumentException(db.getGuild() + " is not a valid alliance. See: " + GuildKey.ALLIANCE_ID.getCommandMention() + "");
         return true;
     }
     @Binding(value = "Must be run in a guild matching the provided ids")

@@ -479,8 +479,8 @@ public class SheetCommands {
         SpyBlitzGenerator.validateTargets(
                 targets,
                 getBpMana,
-                0.5,
-                1.5,
+                TrounceUtil.getMinScoreRange(1_000_000, true) / 1_000_000d,
+                TrounceUtil.getMaxScoreRange(1_000_000, true) / 1_000_000d,
                 !allowUpdeclares,
                 !allowWarAlerted,
                 !allowSpellAlerted,
@@ -813,8 +813,8 @@ public class SheetCommands {
         if (requireDiscord) counterWith.removeIf(f -> f.getUser() == null);
 
         double score = target.getScore();
-        double scoreMin = score / 1.5;
-        double scoreMax = score / 0.5;
+        double scoreMin = TrounceUtil.getMinScoreRange((int) score, false);
+        double scoreMax = TrounceUtil.getMinScoreRange((int) score, true);
 
         if (onlyActive) counterWith.removeIf(f -> {
             if (f.getActive_m() < 60) return false;

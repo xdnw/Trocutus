@@ -3,7 +3,9 @@ package link.locutus.core.db.entities;
 import link.locutus.Trocutus;
 import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.AttackOrSpellType;
+import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.MilitaryUnit;
+import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.kingdom.KingdomOrAlliance;
 import link.locutus.util.ArrayUtil;
 import link.locutus.util.TrounceUtil;
@@ -95,7 +97,25 @@ public class WarParser {
         return result.toString();
     }
 
-    private Map<MilitaryUnit, Long> getTotalCost(boolean isCol1Flag) {
+    public long getStrengthLosses(boolean isCol1Flag) {
+        long total = 0;
+        for (AttackOrSpell attackOrSpell : attackOrSpells) {
+            boolean isAttacker;
+            if (isCol1Flag) {
+                isAttacker = isCol1.test(attackOrSpell);
+            } else {
+                isAttacker = isCol2.test(attackOrSpell) && !isCol1.test(attackOrSpell);
+            }
+            Map<MilitaryUnit, Long> cost = attackOrSpell.getCost(isAttacker);
+            int kingdomId = isAttacker ? attackOrSpell.getAttacker_id() : attackOrSpell.getDefender_id();
+            DBKingdom kingdom = DBKingdom.get(kingdomId);
+            HeroType hero = kingdom == null ? HeroType.NECROMANCER : kingdom.getHero();
+            total += isAttacker ? MilitaryUnit.getAttack(cost, hero) : MilitaryUnit.getDefense(cost, hero);
+        }
+        return total;
+    }
+
+    public Map<MilitaryUnit, Long> getTotalCost(boolean isCol1Flag) {
         Map<MilitaryUnit, Long> total = new EnumMap<>(MilitaryUnit.class);
         for (AttackOrSpell attackOrSpell : attackOrSpells) {
             boolean isAttacker;
@@ -112,5 +132,26 @@ public class WarParser {
 
     public List<AttackOrSpell> getAttackOrSpells() {
         return new ArrayList<>(attackOrSpells);
+    }
+
+    public long getLandGain(boolean isCol1Flag, boolean includePositive, boolean includeLosses) {
+        long total = 0;
+        for (AttackOrSpell attackOrSpell : attackOrSpells) {
+            boolean isAttacker;
+            if (isCol1Flag) {
+                isAttacker = isCol1.test(attackOrSpell);
+            } else {
+                isAttacker = isCol2.test(attackOrSpell) && !isCol1.test(attackOrSpell);
+            }
+            Map<MilitaryUnit, Long> cost = attackOrSpell.getCost(isAttacker);
+            Long land = cost.get(MilitaryUnit.LAND);
+            if (land == null) continue;;
+            if (land > 0 && includeLosses) {
+                total -= land;
+            } else if (land < 0 && includePositive) {
+                total -= land;
+            }
+        }
+        return total;
     }
 }

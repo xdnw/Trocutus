@@ -1,5 +1,6 @@
 package link.locutus.core.db.guild.entities;
 import link.locutus.Trocutus;
+import link.locutus.core.command.CM;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.key.GuildSetting;
@@ -190,7 +191,7 @@ public enum Roles {
         if (role != null) {
             return role.getName();
         }
-        return "No " + name() + " role set. Use ";// + CM.role.alias.set.cmd.create(name(), null, null, null);
+        return "No " + name() + " role set. Use " +  CM.role.alias.set.cmd.create(name(), null, null, null);
     }
 
     public GuildSetting getKey() {

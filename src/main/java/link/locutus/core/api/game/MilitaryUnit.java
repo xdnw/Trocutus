@@ -1,6 +1,12 @@
 package link.locutus.core.api.game;
 
+import link.locutus.Trocutus;
+import link.locutus.util.ArrayUtil;
+
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -47,7 +53,7 @@ public enum MilitaryUnit {
     LAND(false, 500, 0, 0, 0, -10, 0, 0),
     DEVELOPED_LAND(false, 500 + 500, 0, 0, 0, -30, 0, 0),
     MANA(false, 0, 1, 0, 0, 0, 0, 0),
-    EXP(false, 0, 0, -1, 0, 0, 0, 0),
+    EXP(false, 0, 0, 1, 0, 0, 0, 0),
     BATTLE_POINTS(false, 0, 0, 0, 1, 0, 0, 0)
 
 
@@ -132,63 +138,88 @@ public enum MilitaryUnit {
         return defense;
     }
 
-    public static Map.Entry<Map<MilitaryUnit, Long> , Map<MilitaryUnit, Long>> getUnits(Map<MilitaryUnit, Long> attackerCasualties, Map<MilitaryUnit, Long> defenderCasualties, HeroType attType, HeroType defType, boolean isAttack, boolean factorInLosses) {
-        // double attRatio = 0.06 * (double) defStrength / (double) attStrength;
+    public static Map.Entry<Map<MilitaryUnit, Long> , Map<MilitaryUnit, Long>> getUnits(Map<MilitaryUnit, Long> myCasualties, Map<MilitaryUnit, Long> opponentCasualties, HeroType myType, HeroType opponentType, boolean isAttack, boolean isVictory, boolean factorInLosses) {
+        myCasualties = new EnumMap<>(myCasualties);
+        opponentCasualties = new EnumMap<>(opponentCasualties);
+        // remove non buildable
+        myCasualties.entrySet().removeIf(f -> !f.getKey().isBuildable());
+        opponentCasualties.entrySet().removeIf(f -> !f.getKey().isBuildable());
 
-        // double defRatio = 0.04 * (double) attStrength / (double) defStrength;
+        int intervals = 1000;
+        double incrementAtt = 25d / intervals;
+        double incrementDef = 20d / intervals;
 
-        Map<MilitaryUnit, Long> attLossesNormalized = attackerCasualties.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> (long) (e.getValue() / e.getKey().getCasualtyRatio())));
-        Map<MilitaryUnit, Long> defLossesNormalized = defenderCasualties.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> (long) (e.getValue() / e.getKey().getCasualtyRatio())));
+        Map<MilitaryUnit, Long> attLossesNormalized = myCasualties.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> (long) (e.getValue() / e.getKey().getCasualtyRatio())));
+        Map<MilitaryUnit, Long> defLossesNormalized = opponentCasualties.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> (long) (e.getValue() / e.getKey().getCasualtyRatio())));
 
-        long attLossStrength = attLossesNormalized.entrySet().stream().mapToLong(e -> (isAttack ? e.getKey().getAttack(attType) : e.getKey().getDefense(attType)) * e.getValue()).sum();
-        long defLossStrength = defLossesNormalized.entrySet().stream().mapToLong(e -> (isAttack ? e.getKey().getDefense(defType) : e.getKey().getAttack(defType)) * e.getValue()).sum();
+        List<Double> attPcts = new ArrayList<>();
+        List<Map<MilitaryUnit, Long>> attTotalAtPct = new ArrayList<>();
+        List<Long> attStrength = new ArrayList<>();
 
-        System.out.println("AttLossStr " + attLossStrength);
-        System.out.println("DefLossStr " + defLossStrength);
+        List<Double> defPcts = new ArrayList<>();
+        List<Map<MilitaryUnit, Long>> defTotalAtPct = new ArrayList<>();
+        List<Long> defStrength = new ArrayList<>();
 
-        double attDefRatio = (double) defLossStrength / (double) attLossStrength;
-        double defAttRatio = (double) attLossStrength / (double) defLossStrength;
+        for (double attPct = incrementAtt; attPct <= 25; attPct += incrementAtt) {
+            double attackFactor = 100 / attPct;
+            Map<MilitaryUnit, Long> result = new EnumMap<>(MilitaryUnit.class);
+            attLossesNormalized.forEach((k, v) -> result.put(k, (long) (v * attackFactor)));
 
-        double attRatio = (isAttack ? 0.06 / 1.33 : 0.04 * 1.33) * defAttRatio;// / ((double) defLossStrength / attLossStrength); // 1.34
-        double defRatio = (isAttack ? 0.04 * 1.33 : 0.06 / 1.33) * attDefRatio;// / ((double) attLossStrength / defLossStrength); // 1.34
-
-        System.out.println("Att Ratio " + attDefRatio + " | " + attRatio);
-        System.out.println("Def Ratio " + defAttRatio + " | " + defRatio);
-
-        // attLossStrength
-
-        double attMultiplier = (1d / attLossStrength) * (defLossStrength) / attRatio;
-        double defMultiplier = (1d / defLossStrength) * (attLossStrength) / defRatio;
-
-        Map<MilitaryUnit, Long> attUnits = new HashMap<>();
-        Map<MilitaryUnit, Long> defUnits = new HashMap<>();
-        for (Map.Entry<MilitaryUnit, Long> entry : attLossesNormalized.entrySet()) {
-            MilitaryUnit unit = entry.getKey();
-            if (unit.isBuildable()) {
-                attUnits.put(entry.getKey(), (long) (entry.getValue() * attMultiplier));
-            }
+            attPcts.add(attPct);
+            attTotalAtPct.add(result);
+            attStrength.add((long) (isAttack ? getAttack(result, myType) : getDefense(result, myType)));
         }
-        for (Map.Entry<MilitaryUnit, Long> entry : defLossesNormalized.entrySet()) {
-            MilitaryUnit unit = entry.getKey();
-            if (unit.isBuildable()) {
-                defUnits.put(entry.getKey(), (long) (entry.getValue() * defMultiplier));
-            }
+
+        for (double defPct = incrementDef; defPct <= 20; defPct += incrementDef) {
+            double defFactor = 100 / defPct;
+            Map<MilitaryUnit, Long> result = new EnumMap<>(MilitaryUnit.class);
+            defLossesNormalized.forEach((k, v) -> result.put(k, (long) (v * defFactor)));
+
+            defPcts.add(defPct);
+            defTotalAtPct.add(result);
+            defStrength.add((long) (isAttack ? getDefense(result, opponentType) : getAttack(result, opponentType)));
         }
-        if (factorInLosses) {
-            for (Map.Entry<MilitaryUnit, Long> entry : attUnits.entrySet()) {
-                MilitaryUnit unit = entry.getKey();
-                if (unit.isBuildable()) {
-                    attUnits.put(entry.getKey(), (long) (entry.getValue() - attackerCasualties.getOrDefault(entry.getKey(), 0L)));
+
+        int attIClosest = 0;
+        int defJClosest = 0;
+        long closest = Long.MAX_VALUE;
+
+        Map<MilitaryUnit, Long> finalMyCasualties = myCasualties;
+        Map<MilitaryUnit, Long> finalOpponentCasualties = opponentCasualties;
+
+        for (int i = 0; i < attPcts.size(); i++) {
+            double attPct = attPcts.get(i);
+            Map<MilitaryUnit, Long> attMap = attTotalAtPct.get(i);
+            long attStr = attStrength.get(i);
+            for (int j = 0; j < defPcts.size(); j++) {
+                double defPct = defPcts.get(j);
+                Map<MilitaryUnit, Long> defMap = defTotalAtPct.get(j);
+                long defStr = defStrength.get(j);
+
+                if (isVictory && attStr < defStr) continue;
+                if (!isVictory && attStr > defStr) continue;
+
+                Map<MilitaryUnit, Long> myCasualtiesEst = getCasualties((int) attStr, (int) defStr, attMap, isAttack);
+                Map<MilitaryUnit, Long> opponentCasualtiesEst = getCasualties((int) defStr, (int) attStr, defMap, !isAttack);
+
+                // sum diff between myCasualtiesEst and myCasualties
+                long myDiff = myCasualtiesEst.entrySet().stream().mapToLong(e -> Math.abs(e.getValue() - finalMyCasualties.getOrDefault(e.getKey(), 0L))).sum();
+                long opponentDiff = opponentCasualtiesEst.entrySet().stream().mapToLong(e -> Math.abs(e.getValue() - finalOpponentCasualties.getOrDefault(e.getKey(), 0L))).sum();
+
+                long totalDiff = myDiff + opponentDiff;
+                if (totalDiff < closest) {
+                    closest = totalDiff;
+                    attIClosest = i;
+                    defJClosest = j;
                 }
             }
-            for (Map.Entry<MilitaryUnit, Long> entry : defUnits.entrySet()) {
-                MilitaryUnit unit = entry.getKey();
-                if (unit.isBuildable()) {
-                    defUnits.put(entry.getKey(), (long) (entry.getValue() - defenderCasualties.getOrDefault(entry.getKey(), 0L)));
-                }
-            }
         }
 
+        Map<MilitaryUnit, Long> attUnits = attTotalAtPct.get(attIClosest);
+        Map<MilitaryUnit, Long> defUnits = defTotalAtPct.get(defJClosest);
+
+        System.out.println("att units: " + attUnits);
+        System.out.println("def units: " + defUnits);
         return Map.entry(attUnits, defUnits);
     }
 
@@ -201,7 +232,7 @@ public enum MilitaryUnit {
 
         double ratio = isAttack ? attRatio : defRatio;
 
-        Map<MilitaryUnit, Long> casualties = new HashMap<>();
+        Map<MilitaryUnit, Long> casualties = new EnumMap<>(MilitaryUnit.class);
         for (Map.Entry<MilitaryUnit, Long> entry : units.entrySet()) {
             MilitaryUnit unit = entry.getKey();
             if (!unit.isBuildable()) continue;

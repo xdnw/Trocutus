@@ -67,11 +67,11 @@ public class TrounceUtil {
     }
 
     public static int getMaxScoreRange(int score, boolean declare) {
-        return (int) (score * 2);
+        return (int) (score * 1.5);
     }
 
     public static int getMinScoreRange(int score, boolean declare) {
-        return (int) (score * 0.5);
+        return (int) (score * 0.75);
     }
 
     public static String resourcesToString(Map<MilitaryUnit, ? extends Number> resources) {
@@ -130,13 +130,14 @@ public class TrounceUtil {
         }
     }
 
-    public static int landLoot(int attackerAcres, int defenderAcres) {
+    public static int landLoot(int attackerAcres, int defenderAcres, boolean isFey) {
         double defenderRatio = (double) defenderAcres / attackerAcres;
         double loot = 0.1 * attackerAcres * Math.pow(defenderRatio, 2.2);
+        if (isFey) loot = Math.min(loot, 1000);
         return (int) Math.round(loot);
     }
 
-    public static double getFeyLand(int myLand, int attack) {
+    public static double getFeyLand(int attack) {
         double valueLow = Math.sqrt(20000d * attack / 20d);
         double valueMid = 10 * (Math.sqrt(5) * Math.sqrt(3 * attack + 50) - 500);
         double valueHigh = attack / 40d;
@@ -151,13 +152,6 @@ public class TrounceUtil {
     }
 
     public static double getLandValue(int currentLand, int amt) {
-        // 40 soldiers per acre
-
-        // 20 per 2 turns
-        // 40 soldiers per acre
-        // 88 * land * 0.2
-        // x = 1 / 40
-
         return getFeyDPA(currentLand) * 50 * amt;
     }
 
@@ -302,7 +296,7 @@ public class TrounceUtil {
         System.out.println("Attacker " + attacker.getName() + " | " + attacker.getHero());
         System.out.println("Defender " + defender.getName() + " | " + defender.getHero());
 
-        Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> strength = MilitaryUnit.getUnits(attackerLosses, defenderLosses, attacker.getHero(), defender.getHero(), true, true);
+        Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> strength = MilitaryUnit.getUnits(attackerLosses, defenderLosses, attacker.getHero(), defender.getHero(), true, myAttack.victory, true);
         System.out.println("Attacker strength " + TrounceUtil.resourcesToString(strength.getKey()));
         System.out.println("Defender strength " + TrounceUtil.resourcesToString(strength.getValue()));
 //        System.out.println("Defender strength 2 " + MilitaryUnit.getOpponentStrength(attackerLosses, false, HeroType.MAGICIAN));

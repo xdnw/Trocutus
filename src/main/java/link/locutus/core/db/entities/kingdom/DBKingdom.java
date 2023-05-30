@@ -71,6 +71,22 @@ public class DBKingdom implements KingdomOrAlliance {
     }
 
     public static DBKingdom parse(String input) {
+        if (input.contains("/search/")) {
+            String[] split = input.split("/");
+            // last arg
+            input = split[split.length - 1];
+        }
+
+        Integer requiredRealm;
+        if (input.contains("/")) {
+            String[] split = input.split("/", 2);
+            DBRealm realm = DBRealm.parse(split[0]);
+            if (realm == null) return null;
+            requiredRealm = realm.getId();
+            input = split[1];
+        } else {
+            requiredRealm = null;
+        }
         if (MathMan.isInteger(input)) {
             long value = Long.parseLong(input);
             if (value > Integer.MAX_VALUE) {
@@ -79,21 +95,11 @@ public class DBKingdom implements KingdomOrAlliance {
             DBKingdom aa = Trocutus.imp().getDB().getKingdom(Integer.parseInt(input));
             if (aa != null) return aa;
         }
-        if (input.contains("/search/")) {
-            String[] split = input.split("/");
-            // last arg
-            input = split[split.length - 1];
-        }
-
-        if (input.contains("/")) {
-            String[] split = input.split("/", 2);
-            DBRealm realm = DBRealm.parse(split[0]);
-            if (realm == null) return null;
-            Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.realm_id == realm.getId() && (f.getName().equalsIgnoreCase(split[1]) || f.getSlug().equalsIgnoreCase(split[1])));
-            if (matching.size() >= 1) return matching.iterator().next();
+        if (input.startsWith("kingdom:")) {
+            input = input.substring("kingdom:".length());
         }
         String finalInput = input;
-        Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> f.getName().equalsIgnoreCase(finalInput));
+        Set<DBKingdom> matching = Trocutus.imp().getDB().getKingdomsMatching(f -> (requiredRealm == null || f.realm_id == requiredRealm) && (f.getName().equalsIgnoreCase(finalInput) || f.getSlug().equalsIgnoreCase(finalInput)));
         return matching.isEmpty() ? null : matching.iterator().next();
 
     }
@@ -914,7 +920,7 @@ public class DBKingdom implements KingdomOrAlliance {
         if (latestAttack != null && (spy == null || spy.id < latestAttack.id) && result.isEmpty() && calculateUnitsFromAttacks) {
             HeroType attHero = latestAttack.getAttacker() == null ? HeroType.VISIONARY : latestAttack.getAttacker().getHero();
             HeroType defHero = latestAttack.getDefender() == null ? HeroType.VISIONARY : latestAttack.getDefender().getHero();
-            Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> units = MilitaryUnit.getUnits(latestAttack.getCost(true), latestAttack.getCost(false), attHero, defHero, true, true);
+            Map.Entry<Map<MilitaryUnit, Long>, Map<MilitaryUnit, Long>> units = MilitaryUnit.getUnits(latestAttack.getCost(true), latestAttack.getCost(false), attHero, defHero, true, latestAttack.victory, true);
             Map<MilitaryUnit, Long> myUnits = (latestAttack.attacker_id == id ? units.getKey() : units.getValue());
 
             dateUnits = latestAttack.date;
