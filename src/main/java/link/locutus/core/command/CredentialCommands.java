@@ -23,9 +23,7 @@ import java.io.IOException;
 import java.util.Map;
 
 public class CredentialCommands {
-    @Command(desc="Set your api and bot key for the bot\n" +
-            "Your API key can be found on the account page: <https://politicsandwar.com/account/>\n" +
-            "See: <https://forms.gle/KbszjAfPVVz3DX9A7> and DM <@258298021266063360> to get a bot key")
+    @Command(desc="Set your api and bot key for the bot")
     public String addApiKey(@Me Map<DBRealm, DBKingdom> me, @Me IMessageIO io, @Me JSONObject command, String apiKey) throws IOException {
         try {
             IMessageBuilder msg = io.getMessage();
@@ -48,7 +46,7 @@ public class CredentialCommands {
     @RankPermission(Rank.ADMIN)
     public static String login(@Me IMessageIO io,
                                @Me User author,
-                               @Arg("Your username (i.e. email) for Politics And War")
+                               @Arg("Your username (i.e. email) for Trounced")
                                String username,
                                String password) throws IOException {
         IMessageBuilder msg = io.getMessage();
