@@ -177,4 +177,9 @@ public class PrimitiveBindings extends BindingHelper {
         }
         return System.currentTimeMillis() - TimeUtil.timeToSec(argument) * 1000;
     }
+
+    @Binding(types=ParameterData.class)
+    public static ParameterData parameterData() {
+        throw new IllegalStateException("No ParameterData set in command locals.");
+    }
 }

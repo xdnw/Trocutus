@@ -231,7 +231,7 @@ public class GuildKey {
     public static GuildSetting<MessageChannel> DEFENSIVE_SPY_CHANNEL = new GuildChannelSetting(GuildSettingCategory.WAR_ALERTS) {
         @Command(descMethod = "help")
         @RolePermission(Roles.ADMIN)
-        public String OFFENSIVE_SPY_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
+        public String DEFENSIVE_SPY_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
             return DEFENSIVE_SPY_CHANNEL.setAndValidate(db, user, channel);
         }
 

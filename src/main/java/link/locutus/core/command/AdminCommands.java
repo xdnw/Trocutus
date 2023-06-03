@@ -1,5 +1,6 @@
 package link.locutus.core.command;
 
+import link.locutus.DocPrinter2;
 import link.locutus.Trocutus;
 import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Me;
@@ -14,6 +15,7 @@ import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
 import link.locutus.core.db.guild.key.GuildSetting;
+import link.locutus.util.FileUtil;
 import link.locutus.util.PagePriority;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
@@ -21,7 +23,10 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
 
+import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -36,6 +41,30 @@ public class AdminCommands {
     @RolePermission(value = Roles.ADMIN, root = true)
     public String syncMetrics() {
         AllianceMetric.update();
+        return "Done!";
+    }
+
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
+    public String dumpWiki(String pathRelative) throws IOException, InvocationTargetException, IllegalAccessException {
+        CommandManager manager = Trocutus.imp().getCommandManager();
+
+        String commandsStr = DocPrinter2.printCommands(manager.getCommands(), manager.getStore(), manager.getPermisser());
+        String argumentsStr = DocPrinter2.printParsers(manager.getStore());
+        String placeholderStr = DocPrinter2.printPlaceholders(manager.getKingdomPlaceholders(), manager.getStore());
+
+        // write commandsStr to file `path` + File.separator + "commands.md"
+        File file = new File(pathRelative + File.separator + "commands.md");
+        Files.write(file.toPath(), commandsStr.getBytes());
+
+        // write argumentsStr   to file `path` + File.separator + "arguments.md"
+        file = new File(pathRelative + File.separator + "arguments.md");
+        Files.write(file.toPath(), argumentsStr.getBytes());
+
+        // write placeholderStr to file `path` + File.separator + "kingdom_placeholders.md"
+        file = new File(pathRelative + File.separator + "kingdom_placeholders.md");
+        Files.write(file.toPath(), placeholderStr.getBytes());
+
         return "Done!";
     }
 

@@ -51,6 +51,18 @@ public class Placeholders<T> {
         return commands.primarySubCommandIds();
     }
 
+    public CommandGroup getCommands() {
+        return commands;
+    }
+
+    public ValidatorStore getValidators() {
+        return validators;
+    }
+
+    public PermissionHandler getPermisser() {
+        return permisser;
+    }
+
     public List<ParametricCallable> getParametricCallables() {
         List<ParametricCallable> result = new ArrayList<>();
         for (CommandCallable value : this.commands.getSubcommands().values()) {

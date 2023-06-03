@@ -449,7 +449,7 @@ public class TrouncedBindings extends BindingHelper {
     }
 
     @Binding
-    public AllianceList allianceList(ParameterData param, @Default @Me User user, @Me GuildDB db) {
+    public AllianceList allianceList(ParameterData param, @Me GuildDB db, @Default @Me User user) {
         AllianceList list = db.getAllianceList();
         if (list == null) {
             throw new IllegalArgumentException("This guild has no registered alliance. See " + CM.settings.info.cmd.toSlashMention() + " with key " + GuildKey.ALLIANCE_ID.name());
