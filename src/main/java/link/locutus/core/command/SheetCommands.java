@@ -814,7 +814,7 @@ public class SheetCommands {
 
         double score = target.getScore();
         double scoreMin = TrounceUtil.getMinScoreRange((int) score, false);
-        double scoreMax = TrounceUtil.getMinScoreRange((int) score, true);
+        double scoreMax = TrounceUtil.getMaxScoreRange((int) score, false);
 
         if (onlyActive) counterWith.removeIf(f -> {
             if (f.getActive_m() < 60) return false;

@@ -207,7 +207,7 @@ public class FACommands {
 
     @Command(desc = "Create an embassy channel in the embassy category")
     public String embassy(@Me GuildDB db, @Me Guild guild, @Me User user, @Me Map<DBRealm, DBKingdom> me, @Arg("The nation to create an embassy for") DBKingdom nation) {
-        if (!me.equals(nation) && !Roles.FOREIGN_AFFAIRS.has(user, guild)) return "You do not have FOREIGN_AFFAIRS";
+        if (!me.values().contains(nation) && !Roles.FOREIGN_AFFAIRS.has(user, guild)) return "You do not have FOREIGN_AFFAIRS";
         Category category = db.getOrThrow(GuildKey.EMBASSY_CATEGORY);
         if (category == null) {
             return "Embassies are disabled. To set it up, use " + GuildKey.EMBASSY_CATEGORY.getCommandMention() + "";
@@ -242,7 +242,7 @@ public class FACommands {
                 return "Embassy: <#" + channel.getId() + ">";
             }
         }
-        if (nation.getPosition().ordinal() <= Rank.ADMIN.ordinal()) {
+        if (nation.getPosition().ordinal() < Rank.ADMIN.ordinal()) {
             return "You must be an ADMIN to create an embassy";
         }
 

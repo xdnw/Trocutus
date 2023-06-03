@@ -1,6 +1,7 @@
 package link.locutus.core.api.alliance;
 
 import link.locutus.Trocutus;
+import link.locutus.core.api.game.AttackOrSpellType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.WarParser;
 import link.locutus.core.db.entities.alliance.DBAlliance;
@@ -91,7 +92,7 @@ public enum AllianceMetric {
         }
     },
 
-    ATTACK_AVG(false) {
+    ATTACK_AVG(true) {
         @Override
         public double apply(DBAlliance alliance, long turn) {
             return alliance.getKingdoms().stream().mapToLong(DBKingdom::getAttackStrength).average().orElse(0);
@@ -105,7 +106,7 @@ public enum AllianceMetric {
         }
     },
 
-    DEFENSE_AVG(false) {
+    DEFENSE_AVG(true) {
         @Override
         public double apply(DBAlliance alliance, long turn) {
             return alliance.getKingdoms().stream().mapToLong(DBKingdom::getDefenseStrength).average().orElse(0);
@@ -116,7 +117,7 @@ public enum AllianceMetric {
         @Override
         public double apply(DBAlliance alliance, long turn) {
             long start = TimeUtil.getTimeFromTurn(turn - 24);
-            long end = TimeUtil.getTimeFromTurn( + 1);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
             WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
             return parser.getStrengthLosses(false);
         }
@@ -126,7 +127,7 @@ public enum AllianceMetric {
         @Override
         public double apply(DBAlliance alliance, long turn) {
             long start = TimeUtil.getTimeFromTurn(turn - 24);
-            long end = TimeUtil.getTimeFromTurn( + 1);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
             WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
             return parser.getStrengthLosses(true);
         }
@@ -135,7 +136,7 @@ public enum AllianceMetric {
     DAILY_STRENGTH_NET(false) {
         public double apply(DBAlliance alliance, long turn) {
             long start = TimeUtil.getTimeFromTurn(turn - 24);
-            long end = TimeUtil.getTimeFromTurn( + 1);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
             WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
             return parser.getStrengthLosses(false) - parser.getStrengthLosses(true);
         }
@@ -144,7 +145,7 @@ public enum AllianceMetric {
     DAILY_LAND_GAIN_ABS(false) {
         public double apply(DBAlliance alliance, long turn) {
             long start = TimeUtil.getTimeFromTurn(turn - 24);
-            long end = TimeUtil.getTimeFromTurn( + 1);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
             WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
             return parser.getLandGain(true, true, false);
         }
@@ -153,7 +154,7 @@ public enum AllianceMetric {
     DAILY_LAND_LOSS_ABS(false) {
         public double apply(DBAlliance alliance, long turn) {
             long start = TimeUtil.getTimeFromTurn(turn - 24);
-            long end = TimeUtil.getTimeFromTurn( + 1);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
             WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
             return parser.getLandGain(true, false, true);
         }
@@ -162,9 +163,91 @@ public enum AllianceMetric {
     DAILY_LAND_NET(false) {
         public double apply(DBAlliance alliance, long turn) {
             long start = TimeUtil.getTimeFromTurn(turn - 24);
-            long end = TimeUtil.getTimeFromTurn( + 1);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
             WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
             return parser.getLandGain(true, true, true);
+        }
+    },
+
+    LEVEL(true) {
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getLevelPct();
+        }
+    },
+
+    SPELLS_CAST(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getCount(true);
+        }
+    },
+
+    SPELLS_RECEIVED(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            return parser.getCount(false);
+        }
+    },
+
+    ATTACKS_DECLARED(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            parser.allowedWarTypes(Collections.singleton(AttackOrSpellType.ATTACK));
+            return parser.getCount(true);
+        }
+    },
+
+    ATTACKS_RECEIVED(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            long start = TimeUtil.getTimeFromTurn(turn - 24);
+            long end = TimeUtil.getTimeFromTurn(turn + 1);
+            WarParser parser = WarParser.of(null, null, (Set) alliance.getKingdoms(), null, start, end);
+            parser.allowedWarTypes(Collections.singleton(AttackOrSpellType.ATTACK));
+            return parser.getCount(false);
+        }
+    },
+
+    SUPPORT_SOLDIERS(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            Map<Integer, Long> support = Trocutus.imp().getDB().getAidMap(MilitaryUnit.SOLDIERS, alliance.getRealm_id());
+            return alliance.getKingdoms().stream().mapToLong(f -> support.getOrDefault(f.getId(), 0L)).sum();
+        }
+    },
+
+    SUPPORT_GOLD(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            Map<Integer, Long> support = Trocutus.imp().getDB().getAidMap(MilitaryUnit.GOLD, alliance.getRealm_id());
+            return alliance.getKingdoms().stream().mapToLong(f -> support.getOrDefault(f.getId(), 0L)).sum();
+        }
+    },
+
+    HERO_LEVEL_AVG(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToDouble(DBKingdom::getHero_level).average().orElse(0);
+        }
+    },
+
+    ALERT_LEVEL_AVG(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToDouble(DBKingdom::getAlert_level).average().orElse(0);
+        }
+    },
+
+    RESOURCE_LEVEL_AVG(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToDouble(DBKingdom::getResource_levelId).average().orElse(0);
+        }
+    },
+
+    SPELL_LEVEL_AVG(false) {
+        public double apply(DBAlliance alliance, long turn) {
+            return alliance.getKingdoms().stream().mapToDouble(DBKingdom::getSpell_alert).average().orElse(0);
         }
     },
 
@@ -199,12 +282,11 @@ public enum AllianceMetric {
         long currentTurn = TimeUtil.getTurn();
         long startTurn = currentTurn - 400;
         List<AllianceMetric> toUpdateLegacy = Arrays.asList(
-                ATTACK, DEFENSE, DAILY_STRENGTH_KILLS, DAILY_STRENGTH_LOSSES, DAILY_STRENGTH_NET, DAILY_LAND_GAIN_ABS, DAILY_LAND_LOSS_ABS, DAILY_LAND_NET
+                DAILY_STRENGTH_KILLS, DAILY_STRENGTH_LOSSES, DAILY_STRENGTH_NET, DAILY_LAND_GAIN_ABS, DAILY_LAND_LOSS_ABS, DAILY_LAND_NET, SPELLS_RECEIVED, SPELLS_CAST, ATTACKS_RECEIVED, ATTACKS_DECLARED
         );
         for (long turn = startTurn; turn < currentTurn; turn++) {
             for (AllianceMetric metric : toUpdateLegacy) {
                 for (DBAlliance alliance : Trocutus.imp().getDB().getAlliances()) {
-                    System.out.println("Updating " + alliance.getName() + " " + metric + " " + turn + " " + TimeUtil.getTurn());
                     double value = metric.apply(alliance, turn);
                     Trocutus.imp().getDB().addMetric(alliance, metric, turn, value);
                 }

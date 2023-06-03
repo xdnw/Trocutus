@@ -1,15 +1,10 @@
 package link.locutus.core.db.entities.spells;
 
-import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.AttackOrSpellType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.pojo.pages.FireballInteraction;
-import link.locutus.core.api.pojo.pages.SpyInteraction;
 import link.locutus.core.db.entities.AbstractAttackOrSpell;
-import link.locutus.core.db.entities.kingdom.DBKingdom;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 public class DBFireball extends AbstractAttackOrSpell {
@@ -54,7 +49,7 @@ public class DBFireball extends AbstractAttackOrSpell {
     public Map<MilitaryUnit, Long> getCost(boolean isAttacker) {
         Map<MilitaryUnit, Long> result = super.getCost(isAttacker);
         if (isAttacker) return result;
-        result.put(MilitaryUnit.SOLDIER, (long) soldiers);
+        result.put(MilitaryUnit.SOLDIERS, (long) soldiers);
         result.put(MilitaryUnit.CAVALRY, (long) cavalry);
         result.put(MilitaryUnit.ARCHER, (long) archers);
         result.put(MilitaryUnit.ELITE, (long) elites);

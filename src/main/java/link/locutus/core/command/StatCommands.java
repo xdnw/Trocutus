@@ -419,6 +419,7 @@ public class StatCommands {
     public void allianceRankingTime(@Me IMessageIO channel, @Me JSONObject command, Set<DBAlliance> alliances, AllianceMetric metric, @Timestamp long timeStart, @Timestamp long timeEnd, @Switch("r") boolean reverseOrder, @Switch("f") boolean uploadFile) {
         long turnStart = TimeUtil.getTurn(timeStart);
         long turnEnd = TimeUtil.getTurn(timeEnd);
+        System.out.println("Time " + turnStart + " to " + turnEnd + " | " + timeStart + " | " + timeEnd);
         Set<Integer> aaIds = alliances.stream().map(DBAlliance::getId).collect(Collectors.toSet());
 
         Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> metricsStart = Trocutus.imp().getDB().getMetrics(aaIds, metric, turnStart);
@@ -428,10 +429,16 @@ public class StatCommands {
         for (Map.Entry<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> entry : metricsEnd.entrySet()) {
             DBAlliance alliance = entry.getKey();
             if (!metricsStart.containsKey(alliance)) continue;
-            double dataStart = metricsStart.get(alliance).get(metric).values().iterator().next();
-            double dataEnd = entry.getValue().get(metric).values().iterator().next();
-            metricsDiff.put(alliance, dataEnd - dataStart);
+            Map<Long, Double> dataStart = metricsStart.get(alliance).get(metric);
+            double dataStartValue = dataStart.entrySet().stream().max(Map.Entry.comparingByKey()).map(Map.Entry::getValue).orElse(0.0);
+            Map<Long, Double> dataEnd = metricsEnd.get(alliance).get(metric);
+            double dataEndValue = dataEnd.entrySet().stream().max(Map.Entry.comparingByKey()).map(Map.Entry::getValue).orElse(0.0);
+
+            System.out.println("Size " + dataStart.size() + " | " + dataEnd.size() + " | " + (dataEndValue - dataStartValue) + " | " + dataEndValue + " | " + dataStartValue);
+
+            metricsDiff.put(alliance, dataEndValue - dataStartValue);
         }
+        System.out.println("Metrics " + metricsEnd.size());
         displayAllianceRanking(channel, command, metric, metricsDiff, reverseOrder, uploadFile);
     }
 

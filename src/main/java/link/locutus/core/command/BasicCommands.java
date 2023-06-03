@@ -25,6 +25,8 @@ import link.locutus.util.MarkupUtil;
 import link.locutus.util.MathMan;
 import link.locutus.util.StringMan;
 import link.locutus.util.TrounceUtil;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.User;
 import org.json.JSONObject;
 
@@ -47,6 +49,13 @@ import java.util.stream.Collectors;
 public class BasicCommands {
     private final Map<UUID, Integer> registerIds = new ConcurrentHashMap<>();
     private final Map<UUID, Long> registerUsers = new ConcurrentHashMap<>();
+
+    @Command
+    public String about() {
+        return """
+                Bot created and managed by the Interwebs Sourcery division of the Borg Collective. For setup instructions visit <https://github.com/xdnw/Trocutus> and follow the summoning ritual instructions.
+                """;
+    }
 
     @Command
     public String register(@Me User user, DBKingdom kingdom, @Default UUID key) throws IOException {
@@ -81,7 +90,20 @@ public class BasicCommands {
                 throw new IllegalArgumentException("Your user id (" + user.getIdLong() + ") does not match who ran the register command: " + userId + " (try again)");
             }
             Trocutus.imp().getDB().saveUser(user.getIdLong(), kingdom);
-            return "Registered your kingdom: " + kingdom.getName() + " " + user.getAsMention();
+
+            StringBuilder response = new StringBuilder("Registered your kingdom: " + kingdom.getName() + " " + user.getAsMention());
+            for (Guild mutualGuild : user.getMutualGuilds()) {
+                GuildDB db = Trocutus.imp().getGuildDB(mutualGuild);
+                if (db == null) continue;
+                Member member = mutualGuild.getMember(user);
+                if (member == null) continue;
+                try {
+                    db.getAutoRoleTask().autoRole(member, f -> response.append("\n" + mutualGuild.getName() + ": " + f));
+                } catch (Throwable e) {
+
+                }
+            }
+            return response.toString();
         }
     }
 
@@ -163,7 +185,8 @@ public class BasicCommands {
             result.append(kingdom.toMarkdown(myName, true));
 
             result.append("\n");
-            result.append(kingdom.getInfoRowMarkdown(myName, true, false, false));
+            boolean canView = me.values().stream().map(DBKingdom::getAlliance_id).anyMatch(f -> f == kingdom.getAlliance_id());
+            result.append(kingdom.getInfoRowMarkdown(myName, true, canView, false, false));
 
             io.create().embed(kingdom.getName(), result.toString()).send();
         } else {
@@ -259,12 +282,12 @@ public class BasicCommands {
     }
 
     @Command
-    public String raid(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("n") @Default("15") int numResults,  @Switch("g") boolean sortGold, @Switch("l") boolean sortLand, @Switch("i") boolean ignoreLosses, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean excludeWarUnitEstimate) throws IOException {
+    public String raid(@Me GuildDB db, DBRealm realm, @Me Map<DBRealm, DBKingdom> me, @Switch("att") DBKingdom myKingdom, @Switch("n") @Default("15") int numResults,  @Switch("g") boolean sortGold, @Switch("l") boolean sortLand, @Switch("i") boolean ignoreLosses, @Switch("dnr") boolean ignoreDoNotRaid, @Switch("w") boolean excludeWarUnitEstimate, @Switch("s") boolean includeStronger) throws IOException {
         if (sortGold && sortLand) {
             sortGold = false;
             sortLand = false;
         }
-        DBKingdom myKingdom = me.get(realm);
+        if (myKingdom == null) myKingdom = me.get(realm);
         if (myKingdom == null) return "You are not in a kingdom in this realm";
 
         DBKingdom root = Trocutus.imp().rootAuth().getKingdom(realm.getId());
@@ -290,7 +313,7 @@ public class BasicCommands {
         for (DBKingdom kingdom : inRange) {
             DBSpy spy = kingdom.getLatestSpyReport();
             if (spy == null) continue;
-            if (spy.defense > memberInfo.stats.attack) continue;
+            if (spy.defense > memberInfo.stats.attack && !includeStronger) continue;
             double goldLoot =  (long) (spy.gold * 0.2);
             double landLoot = TrounceUtil.landLoot(memberInfo.land.total, kingdom.getTotal_land(), false);
 
@@ -322,7 +345,8 @@ public class BasicCommands {
         for (int i = 0; i < numResults; i++) {
             Map.Entry<DBKingdom, Long> entry = values.get(i);
             DBKingdom kingdom = entry.getKey();
-            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate));
+            boolean canView = me.values().stream().map(DBKingdom::getAlliance_id).anyMatch(f -> f == kingdom.getAlliance_id());
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate, canView));
             double value = entry.getValue();
             response.append("Worth: `$" + MathMan.format((long) value) + "` (" + types + ")\n\n");
         }
@@ -449,7 +473,8 @@ public class BasicCommands {
             Map.Entry<DBKingdom, Long> result = results.get(i);
             DBKingdom kingdom = result.getKey();
 
-            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate));
+            boolean canView = me.values().stream().map(DBKingdom::getAlliance_id).anyMatch(f -> f == kingdom.getAlliance_id());
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate, canView));
             response.append("\n\n");
         }
 

@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 
 public class WarCommands {
     @Command
-    public String war(@Me GuildDB db, @Me Map<DBRealm, DBKingdom> me, int maxAttackAlert, int maxSpellAlert, @Default Set<DBKingdom> enemies, @Switch("n") @Default("15") int numResults, @Switch("s") boolean includeStronger, @Switch("w") boolean excludeWarUnitEstimate) {
+    public String war(@Me GuildDB db, @Me Map<DBRealm, DBKingdom> me, int maxAttackAlert, int maxSpellAlert, @Default Set<DBKingdom> enemies, @Switch("att") DBKingdom myKingdom, @Switch("n") @Default("15") int numResults, @Switch("s") boolean includeStronger, @Switch("w") boolean excludeWarUnitEstimate) {
         if (enemies == null) {
             enemies = new HashSet<>();
             Set<Integer> enemyIds = db.getCoalition(Coalition.ENEMIES);
@@ -45,14 +45,15 @@ public class WarCommands {
         }
         int realmId = realm.iterator().next();
         DBRealm realmObj = DBRealm.getOrCreate(realmId);
-        DBKingdom myKingdom = me.get(realmObj);
+        if (myKingdom == null) myKingdom = me.get(realmObj);
         if (myKingdom == null) {
             return "You are not in this realm. Use: " + CM.register.cmd.toSlashMention();
         }
         int outScoreRemoved = 0;
         {
             int size = enemies.size();
-            enemies.removeIf(k -> k.getScore() < myKingdom.getAttackMinRange() || k.getScore() > myKingdom.getAttackMaxRange());
+            DBKingdom finalMyKingdom = myKingdom;
+            enemies.removeIf(k -> k.getScore() < finalMyKingdom.getAttackMinRange() || k.getScore() > finalMyKingdom.getAttackMaxRange());
             outScoreRemoved = size - enemies.size();
         }
         int attackAlertRemoved = 0;
@@ -99,7 +100,8 @@ public class WarCommands {
         for (int i = 0; i < numResults; i++) {
             Map.Entry<DBKingdom, Integer> result = enemyStrength.get(i);
             DBKingdom kingdom = result.getKey();
-            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate));
+            boolean canView = me.values().stream().map(DBKingdom::getAlliance_id).anyMatch(f -> f == kingdom.getAlliance_id());
+            response.append(kingdom.getInfoRowMarkdown(myKingdom.getSlug(), !excludeWarUnitEstimate, canView));
             response.append("\n\n");
         }
         if (errors.length() > 0) {

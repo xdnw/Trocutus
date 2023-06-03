@@ -694,6 +694,18 @@ public class GuildKey {
         }
     }.setupRequirements(f -> f.requireActiveGuild());
 
+    public static GuildSetting<MessageChannel> ENEMY_SUPPORT_CHANNEL = new GuildChannelSetting(GuildSettingCategory.WAR_ALERTS) {
+        @Command(descMethod = "help")
+        @RolePermission(Roles.ADMIN)
+        public String ENEMY_SUPPORT_CHANNEL(@Me GuildDB db, @Me User user, MessageChannel channel) {
+            return ENEMY_SUPPORT_CHANNEL.setAndValidate(db, user, channel);
+        }
+        @Override
+        public String help() {
+            return "The #channel to receive alerts when enemies send aid";
+        }
+    }.setupRequirements(f -> f.requireActiveGuild());
+
     private static final Map<String, GuildSetting> BY_NAME = new HashMap<>();
 
     static {

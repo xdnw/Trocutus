@@ -1,17 +1,13 @@
 package link.locutus.core.api.game;
 
-import link.locutus.Trocutus;
-import link.locutus.util.ArrayUtil;
-
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 public enum MilitaryUnit {
-    SOLDIER(1, true, 100, 0, 0, 0, 1, 1, 1),
+    SOLDIERS(1, true, 100, 0, 0, 0, 1, 1, 1),
     CAVALRY(0.9, true, 100 + 200, 0, 0, 0, 2, 3, 1),
     ARCHER(0.9, true, 100 + 200, 0, 0, 0, 2, 1, 3),
     ELITE(0.8, true, 100 + 500, 0, 0, 0, 3, 4, 4) {
@@ -26,6 +22,7 @@ public enum MilitaryUnit {
                 case SLAYER -> 6;
                 case NECROMANCER -> 3;
                 case AUTOMATOR -> 5;
+                case FEY -> 3;
                 default -> {
                     throw new IllegalStateException("Unexpected value: " + hero);
                 }
@@ -43,6 +40,7 @@ public enum MilitaryUnit {
                 case SLAYER -> 2;
                 case NECROMANCER -> 3;
                 case AUTOMATOR -> 5;
+                case FEY -> 3;
                 default -> {
                     throw new IllegalStateException("Unexpected value: " + hero);
                 }
@@ -59,7 +57,7 @@ public enum MilitaryUnit {
 
     ;
 
-    private static MilitaryUnit[] values = values();
+    public static MilitaryUnit[] values = values();
     private final boolean buildable;
     private final int goldValue, manaValue;
     private final int upkeep;
@@ -252,7 +250,7 @@ public enum MilitaryUnit {
 
     public static String getUnitMarkdown(Map<MilitaryUnit, Long> units) {
         StringBuilder body = new StringBuilder();
-        Long soldiers = units.getOrDefault(MilitaryUnit.SOLDIER, 0L);
+        Long soldiers = units.getOrDefault(MilitaryUnit.SOLDIERS, 0L);
         Long archers = units.getOrDefault(MilitaryUnit.ARCHER, 0L);
         Long cavalry = units.getOrDefault(MilitaryUnit.CAVALRY, 0L);
         Long elites = units.getOrDefault(MilitaryUnit.ELITE, 0L);

@@ -18,6 +18,8 @@ public enum AttackOrSpellType {
     },
     FIREBALL(0, 2000, 100,true, true),
 
+    AID(0, 0, 0, false, false),
+
     ;
 
     private final int bp;

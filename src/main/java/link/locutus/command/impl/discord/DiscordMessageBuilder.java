@@ -134,7 +134,14 @@ public class DiscordMessageBuilder implements IMessageBuilder {
 
     public MessageCreateData build(boolean includeContent) {
         MessageCreateBuilder discBuilder = new MessageCreateBuilder();
-        if (!buttons.isEmpty()) discBuilder.setActionRow(buttons);
+        if (!buttons.isEmpty()) {
+            List<Button> buttons = new ArrayList<>(this.buttons);
+            while (!buttons.isEmpty()) {
+                List<Button> group = buttons.subList(0, Math.min(5, buttons.size()));
+                buttons = buttons.subList(group.size(), buttons.size());
+                discBuilder.addActionRow(group);
+            }
+        }
 
         if (!embeds.isEmpty()) {
             if (!remapLongCommands.isEmpty()) {

@@ -133,9 +133,11 @@ public class Settings extends Config {
         public INTENTS INTENTS;
         @Create
         public CACHE CACHE;
-
         @Create
         public COMMAND COMMAND;
+
+        @Comment("Error channel for the bot (set to 0 to disable)")
+        public long ERROR_CHANNEL_ID = 0;
 
         public static class INTENTS {
             public boolean GUILD_MEMBERS = true;

@@ -137,12 +137,12 @@ public final class FileUtil {
     private static long lastRead = 0;
 
     public static CompletableFuture<String> readStringFromURL(int priority, String urlStr, byte[] dataBinary, RequestType type, CookieManager msCookieManager, Consumer<HttpURLConnection> apply) {
-        long orderedPriority = requestOrder.incrementAndGet() + Integer.MAX_VALUE + priority;
+        long orderedPriority = requestOrder.incrementAndGet() + Integer.MAX_VALUE * (long) priority;
         PageRequestQueue.PageRequestTask<String> task = pageRequestQueue.submit(new Supplier<String>() {
             @Override
             public String get() {
                 long now = System.currentTimeMillis();
-                System.out.println("Requesting " + urlStr + " at " + now + " with priority " + priority + " ( last: " + (now - lastRead) + " )");
+//                System.out.println("Requesting " + urlStr + " at " + now + " with priority " + priority + " ( last: " + (now - lastRead) + " ). Queue size: " + pageRequestQueue.size());
                 lastRead = now;
                 try {
                     URL url = new URL(urlStr);

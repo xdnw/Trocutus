@@ -57,4 +57,8 @@ public class DBRealm {
     public Set<DBKingdom> getKindoms(Predicate<DBKingdom> predicate) {
         return Trocutus.imp().getDB().getKingdomsMatching(f -> f.getRealm_id() == id && predicate.test(f));
     }
+
+    public Set<DBAlliance> getAlliances() {
+        return Trocutus.imp().getDB().getAllianceMatching(f -> f.getRealm_id() == id);
+    }
 }

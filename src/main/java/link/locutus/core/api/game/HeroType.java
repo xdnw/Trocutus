@@ -20,6 +20,7 @@ public enum HeroType {
     SLAYER,
     NECROMANCER,
     AUTOMATOR,
+    FEY,
 
     ;
 

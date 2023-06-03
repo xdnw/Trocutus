@@ -9,6 +9,10 @@ import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
+import link.locutus.util.RateLimitUtil;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 
 import java.util.LinkedHashMap;
@@ -35,6 +39,19 @@ public class PlayerSettingCommands {
             target.setLoginNotifyMap(existingMap);
         }
         return "You will be notified when " + target.getName() + " logs in (within the next 5d).";
+    }
+
+    @Command
+    public String enemyAlertOptOut(@Me User user, @Me Member member, @Me Guild guild) {
+        Role role = Roles.WAR_ALERT_OPT_OUT.toRole(guild);
+        if (role == null) {
+            return "Please have an admin set an opt out role: " + Roles.WAR_ALERT_OPT_OUT.toDiscordRoleNameElseInstructions(guild);
+        }
+        if (member.getRoles().contains(role)) {
+            return "You are already opted out with the role for " + Roles.WAR_ALERT_OPT_OUT.name();
+        }
+        RateLimitUtil.complete(guild.addRoleToMember(member, role));
+        return "You have been opted out of " + Roles.WAR_ALERT_OPT_OUT.name() + " alerts";
     }
 
 }

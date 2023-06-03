@@ -55,16 +55,17 @@ public class DBTreaty {
     }
 
     @Override
-    public int hashCode() {
-        return realm_id + type.hashCode() + from + to;
-    }
-
-    @Override
     public boolean equals(Object obj) {
         if (obj instanceof DBTreaty) {
             DBTreaty other = (DBTreaty) obj;
-            return other.realm_id == realm_id && other.type == type && other.from == from && other.to == to;
+            return other.realm_id == realm_id && other.type == type &&
+                    ((other.from == from && other.to == to) || (other.from == to && other.to == from));
         }
         return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return from ^ to ^ realm_id ^ type.ordinal();
     }
 }

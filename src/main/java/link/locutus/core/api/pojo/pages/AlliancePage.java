@@ -30,6 +30,7 @@ public class AlliancePage {
         public String spell_alert_label;
         public String active;
         public Hero hero;
+        public Boolean is_fey;
     }
 
 

@@ -20,7 +20,6 @@ import link.locutus.util.DiscordUtil;
 import link.locutus.util.MathMan;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 
@@ -114,13 +113,13 @@ public class GuildHandler {
         int defAttack = MilitaryUnit.getAttack(defUnits, defHero);
         int defDefense = MilitaryUnit.getDefense(defUnits, defHero);
         body.append("**attacker** (attack: " + attAttack + " | defense:" + attDefense + ")\n```");
-        body.append(String.format("%6s", attUnits.getOrDefault(MilitaryUnit.SOLDIER, 0L))).append(" " + soldierChar).append(" | ")
+        body.append(String.format("%6s", attUnits.getOrDefault(MilitaryUnit.SOLDIERS, 0L))).append(" " + soldierChar).append(" | ")
                 .append(String.format("%5s", attUnits.getOrDefault(MilitaryUnit.CAVALRY, 0L))).append(" " + archerChar).append(" | ")
                 .append(String.format("%5s", attUnits.getOrDefault(MilitaryUnit.ARCHER, 0L))).append(" " + cavalryChar).append(" | ")
                 .append(String.format("%4s", attUnits.getOrDefault(MilitaryUnit.ELITE, 0L))).append(" " + eliteChar)
                 .append("```\n");
         body.append("**defender** (attack: " + defAttack + " | defense:" + defDefense + ")\n```");
-        body.append(String.format("%6s", defUnits.getOrDefault(MilitaryUnit.SOLDIER, 0L))).append(" " + soldierChar).append(" | ")
+        body.append(String.format("%6s", defUnits.getOrDefault(MilitaryUnit.SOLDIERS, 0L))).append(" " + soldierChar).append(" | ")
                 .append(String.format("%5s", defUnits.getOrDefault(MilitaryUnit.CAVALRY, 0L))).append(" " + archerChar).append(" | ")
                 .append(String.format("%5s", defUnits.getOrDefault(MilitaryUnit.ARCHER, 0L))).append(" " + cavalryChar).append(" | ")
                 .append(String.format("%4s", defUnits.getOrDefault(MilitaryUnit.ELITE, 0L))).append(" " + eliteChar)

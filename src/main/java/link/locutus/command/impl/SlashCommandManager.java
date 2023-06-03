@@ -11,6 +11,7 @@ import link.locutus.command.binding.validator.ValidatorStore;
 import link.locutus.command.command.*;
 import link.locutus.command.impl.discord.DiscordHookIO;
 import link.locutus.command.impl.discord.binding.autocomplete.DiscordCompleter;
+import link.locutus.core.command.TrounceCompleter;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.MathMan;
 import link.locutus.util.RateLimitUtil;
@@ -216,6 +217,7 @@ public class SlashCommandManager extends ListenerAdapter {
     public List<SlashCommandData> toSlashCommandData(CommandGroup commands, ValueStore store, Map<ParametricCallable, String> commandNames) {
         new PrimitiveCompleter().register(store);
         new DiscordCompleter().register(store);
+        new TrounceCompleter().register(store);
 
 
         List<SlashCommandData> toRegister = new ArrayList<>();

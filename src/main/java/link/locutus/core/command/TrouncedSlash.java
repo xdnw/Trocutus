@@ -133,11 +133,11 @@ public class TrouncedSlash extends SlashCommandManager {
         User user = event.getUser();
         userIdToAutoCompleteTimeNs.put(user.getIdLong(), startNanos);
 
-        String path = event.getFullCommandName();
+        String path = event.getFullCommandName().replaceAll("/", " ");
         AutoCompleteQuery option = event.getFocusedOption();
         String optionName = option.getName();
 
-        List<String> pathArgs = StringMan.split(path, '/');
+        List<String> pathArgs = StringMan.split(path, ' ');
         CommandManager commands = Trocutus.imp().getCommandManager();
         Map.Entry<CommandCallable, String> cmdAndPath = commands.getCallableAndPath(pathArgs);
         CommandCallable cmd = cmdAndPath.getKey();

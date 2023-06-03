@@ -5,6 +5,7 @@ import link.locutus.Trocutus;
 import link.locutus.command.command.IMessageBuilder;
 import link.locutus.command.impl.discord.DiscordChannelIO;
 import link.locutus.core.api.alliance.Rank;
+import link.locutus.core.command.CM;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.kingdom.KingdomFilter;
@@ -14,6 +15,7 @@ import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.entities.Coalition;
 import link.locutus.core.db.guild.entities.EnemyAlertChannelMode;
 import link.locutus.core.db.guild.entities.Roles;
+import link.locutus.core.event.aid.AnonymousAidEvent;
 import link.locutus.core.event.kingdom.KingdomChangeActiveEvent;
 import link.locutus.core.event.kingdom.KingdomChangeAlertEvent;
 import link.locutus.core.event.kingdom.KingdomChangePositionEvent;
@@ -25,6 +27,7 @@ import link.locutus.core.settings.Settings;
 import link.locutus.util.AlertUtil;
 import link.locutus.util.DiscordUtil;
 import link.locutus.util.FileUtil;
+import link.locutus.util.MathMan;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
 import link.locutus.util.TimeUtil;
@@ -260,6 +263,14 @@ public class KingdomListener {
                             msg.append(StringMan.join(inRangeUsersWeaker, ", ", m -> m.getAsMention()));
                             msg.append("\n");
                         }
+
+                        if (!inRangeUsersStronger.isEmpty() || !inRangeUsersWeaker.isEmpty()) {
+                            if (optOut != null) {
+                                msg.append("To opt out of these alerts, use: " + CM.alert.opt_out.enemy_alert.cmd.toSlashMention());
+                            } else {
+                                msg.append(Roles.WAR_ALERT_OPT_OUT.toDiscordRoleNameElseInstructions(guild));
+                            }
+                        }
                     } else if (mode.pingRole()) {
                         msg.append(bountyRole.getAsMention());
                     }
@@ -318,5 +329,26 @@ public class KingdomListener {
                 }
             });
         }
+    }
+
+    @Subscribe
+    public void onAnonymousAid(AnonymousAidEvent event) {
+        DBKingdom sender = event.getSender();
+        AlertUtil.forEachChannel(f -> true, GuildKey.ENEMY_SUPPORT_CHANNEL, new BiConsumer<MessageChannel, GuildDB>() {
+            @Override
+            public void accept(MessageChannel channel, GuildDB db) {
+                Set<Integer> enemies = db.getCoalition(Coalition.ENEMIES);
+                if (!enemies.contains(sender.getAlliance_id())) return;
+
+                String title = "Enemy Sent Support";
+                StringBuilder body = new StringBuilder();
+                body.append("## **Amount**: `" + MathMan.format(event.getAmount())).append("`\n");
+                body.append("## **Unit**: `" + event.getUnit()).append("`\n");
+                body.append("## **Sender**:\n");
+                body.append(sender.toMarkdown(null, false));
+                body.append("\n");
+                DiscordUtil.createEmbedCommand(channel, title, body.toString());
+            }
+        });
     }
 }

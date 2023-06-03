@@ -19,6 +19,7 @@ import link.locutus.core.api.alliance.AllianceMetric;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.HeroType;
+import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.game.TreatyType;
 import link.locutus.core.api.pojo.Api;
 import link.locutus.core.api.pojo.pages.FireballInteraction;
@@ -27,12 +28,14 @@ import link.locutus.core.db.entities.alliance.AllianceMeta;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.KingdomMeta;
 import link.locutus.core.db.entities.kingdom.KingdomOrAlliance;
+import link.locutus.core.db.entities.spells.DBAid;
 import link.locutus.core.db.entities.spells.DBFireball;
 import link.locutus.core.db.entities.war.DBAttack;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.entities.alliance.DBTreaty;
+import link.locutus.core.event.aid.AnonymousAidEvent;
 import link.locutus.core.event.alliance.AllianceCreateEvent;
 import link.locutus.core.event.alliance.AllianceDeleteEvent;
 import link.locutus.core.event.alliance.AllianceUpdateEvent;
@@ -86,6 +89,8 @@ public class TrouncedDB extends DBMain {
     private Map<Integer, Long> kingdomToUser = new ConcurrentHashMap<>();
 
     Map<Integer, DBKingdom> kingdoms = new ConcurrentHashMap<>();
+
+    Map<Integer, DBKingdom> feyKingdoms = new ConcurrentHashMap<>();
     Map<Integer, DBAlliance> alliances = new ConcurrentHashMap<>();
     Map<Integer, DBRealm> realms = new ConcurrentHashMap<>();
     Map<Integer, Map<Integer, Map<Integer, DBTreaty>>> treatiesByAlliance = new ConcurrentHashMap<>();
@@ -177,6 +182,7 @@ public class TrouncedDB extends DBMain {
             existing = authCache.get(userId);
             if (existing == null) {
                 Map.Entry<String, String> userPass = getUserPass(userId);
+                if (userPass == null) return null;
                 existing = new Auth(userId, userPass.getKey(), userPass.getValue());
                 authCache.put(userId, existing);
             }
@@ -341,9 +347,14 @@ public class TrouncedDB extends DBMain {
                 HeroType hero = HeroType.values[rs.getInt("hero")];
                 int heroLevel = rs.getInt("hero_level");
                 long last_fetched = rs.getInt("last_fetched");
+                boolean is_fey = rs.getInt("is_fey") > 0;
 
-                DBKingdom kingdom = new DBKingdom(id, realmId, allianceId, position, name, slug, totalLand, alertLevel, resourceLevel, spellAlert, lastActive, vacationStart, hero, heroLevel, last_fetched);
-                kingdoms.put(id, kingdom);
+                DBKingdom kingdom = new DBKingdom(id, realmId, allianceId, position, name, slug, totalLand, alertLevel, resourceLevel, spellAlert, lastActive, vacationStart, hero, heroLevel, last_fetched, is_fey);
+                if (is_fey) {
+                    feyKingdoms.put(id, kingdom);
+                } else {
+                    kingdoms.put(id, kingdom);
+                }
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -449,7 +460,9 @@ public class TrouncedDB extends DBMain {
                 .putColumn("hero", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("hero_level", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("last_fetched", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("is_fey", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .create(getDb());
+        // add column is_fey bigint
 
         // alliances
         TablePreset.create("ALLIANCES")
@@ -556,6 +569,17 @@ public class TrouncedDB extends DBMain {
                 .putColumn("kingdom_id", ColumnType.BIGINT.struct().setNullAllowed(false).setPrimary(true).configure(f -> f.apply(null)))
                 .putColumn("id", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .create(getDb());
+
+        // AID_LEADERBOARD
+        // id, amount, unit
+        String aidCreate = TablePreset.create("AID_LEADERBOARD2")
+                .putColumn("id", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("realm_id", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("amount", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("unit", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .buildQuery(getDb().getType());
+        aidCreate = aidCreate.replace(");", ", PRIMARY KEY(id, unit));");
+        getDb().executeUpdate(aidCreate);
 
 
         // ------------------------------------------
@@ -1179,7 +1203,11 @@ public class TrouncedDB extends DBMain {
     }
 
     public DBKingdom getKingdom(int id) {
-        return kingdoms.get(id);
+        DBKingdom kingdom = kingdoms.get(id);
+        if (kingdom == null) {
+            kingdom = feyKingdoms.get(id);
+        }
+        return kingdom;
     }
 
     private final ThrowingBiConsumer<DBKingdom, PreparedStatement> setKingdom = new ThrowingBiConsumer<DBKingdom, PreparedStatement>() {
@@ -1191,7 +1219,7 @@ public class TrouncedDB extends DBMain {
             stmt.setInt(4, kingdom.getPosition().ordinal());
             stmt.setString(5, kingdom.getName());
             stmt.setString(6, kingdom.getSlug());
-            stmt.setInt(7, kingdom.getTotal_land());
+            stmt.setLong(7, kingdom.getTotal_land());
             stmt.setInt(8, kingdom.getAlert_level());
             stmt.setInt(9, kingdom.getResource_level().ordinal());
             stmt.setInt(10, kingdom.getSpell_alert());
@@ -1200,12 +1228,13 @@ public class TrouncedDB extends DBMain {
             stmt.setInt(13, kingdom.getHero().ordinal());
             stmt.setInt(14, kingdom.getHero_level());
             stmt.setLong(15, kingdom.getLast_fetched());
+            stmt.setLong(16, kingdom.isFey() ? 1 : 0);
         }
     };
     public int[] saveKingdoms(List<DBKingdom> toSave) {
         int[] result;
-        String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched, is_fey) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         if (toSave.size() == 1) {
             DBKingdom kingdom = toSave.iterator().next();
             result = new int[]{update(query, stmt -> setKingdom.accept(kingdom, stmt))};
@@ -1235,12 +1264,16 @@ public class TrouncedDB extends DBMain {
             }
         }
         for (DBKingdom kingdom : toSave) {
-            kingdoms.put(kingdom.getId(), kingdom);
-            DBKingdom originalKingdom = original.get(kingdom.getId());
-            if (originalKingdom == null) {
-                events.add(new KingdomCreateEvent(kingdom));
+            if (kingdom.isFey()) {
+                feyKingdoms.put(kingdom.getId(), kingdom);
             } else {
-                events.add(new KingdomUpdateEvent(originalKingdom, kingdom));
+                kingdoms.put(kingdom.getId(), kingdom);
+                DBKingdom originalKingdom = original.get(kingdom.getId());
+                if (originalKingdom == null) {
+                    events.add(new KingdomCreateEvent(kingdom));
+                } else {
+                    events.add(new KingdomUpdateEvent(originalKingdom, kingdom));
+                }
             }
         }
 
@@ -1256,6 +1289,10 @@ public class TrouncedDB extends DBMain {
         return realms.get(realmId);
     }
 
+    public Set<DBKingdom> getFeyMatching(Predicate<DBKingdom> predicate) {
+        return feyKingdoms.values().stream().filter(predicate).collect(Collectors.toSet());
+    }
+
     public Set<DBKingdom> getKingdomsMatching(Predicate<DBKingdom> predicate) {
         return kingdoms.values().stream().filter(predicate).collect(Collectors.toSet());
     }
@@ -1266,7 +1303,9 @@ public class TrouncedDB extends DBMain {
 
     public void deleteKingdoms(Set<DBKingdom> kingdoms) {
         if (kingdoms.isEmpty()) return;
-        kingdoms.removeAll(kingdoms);
+        for (DBKingdom kingdom : kingdoms) {
+            this.kingdoms.remove(kingdom.getId());
+        }
 
         // delete from db
         String query = "DELETE FROM KINGDOMS WHERE id = ?";
@@ -1422,7 +1461,7 @@ public class TrouncedDB extends DBMain {
 
         Map<DBAlliance, Map<AllianceMetric, Map<Long, Double>>> result = new HashMap<>();
 
-        String query = "SELECT * FROM ALLIANCE_METRICS WHERE alliance_id in " + allianceQueryStr + " AND metric = ? and turn <= ? GROUP BY alliance_id ORDER BY turn DESC LIMIT " + allianceIds.size();
+        String query = "SELECT * FROM ALLIANCE_METRICS WHERE alliance_id in " + allianceQueryStr + " AND metric = ? and turn <= ? ORDER BY turn DESC LIMIT " + allianceIds.size();
         query(query, new ThrowingConsumer<PreparedStatement>() {
             @Override
             public void acceptThrows(PreparedStatement stmt) throws Exception {
@@ -1435,12 +1474,14 @@ public class TrouncedDB extends DBMain {
                 while (rs.next()) {
                     int allianceId = rs.getInt("alliance_id");
                     AllianceMetric metric = AllianceMetric.values[rs.getInt("metric")];
-                    long turn = rs.getLong("turn");
+                    long newTurn = rs.getLong("turn");
                     double value = rs.getDouble("value");
+
+                    System.out.println("Turn " + newTurn + " | " + value);
 
                     DBAlliance alliance = DBAlliance.getOrCreate(allianceId, 0);
                     if (!result.containsKey(alliance)) {
-                        result.computeIfAbsent(alliance, f -> new HashMap<>()).computeIfAbsent(metric, f -> new HashMap<>()).put(turn, value);
+                        result.computeIfAbsent(alliance, f -> new HashMap<>()).computeIfAbsent(metric, f -> new LinkedHashMap<>()).put(newTurn, value);
                     }
                 }
             }
@@ -1718,15 +1759,14 @@ public class TrouncedDB extends DBMain {
     }
 
     public List<AttackOrSpell> getAttackOrSpells(Collection<KingdomOrAlliance> attackers, Collection<KingdomOrAlliance> defenders, long start, long end) {
-        Set<Integer> col1KingdomIds = attackers.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
-        Set<Integer> col1AllianceIds = attackers.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
-        Set<Integer> col2KingdomIds = defenders.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
-        Set<Integer> col2AllianceIds = defenders.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
-
-        Predicate<AttackOrSpell> isCol1Att = f -> col1KingdomIds.contains(f.getAttacker_id()) || col1AllianceIds.contains(f.getAttacker_aa());
-        Predicate<AttackOrSpell> isCol2Att = f -> col2KingdomIds.contains(f.getAttacker_id()) || col2AllianceIds.contains(f.getAttacker_aa());
-        Predicate<AttackOrSpell> isCol1Def = f -> col1KingdomIds.contains(f.getDefender_id()) || col1AllianceIds.contains(f.getDefender_aa());
-        Predicate<AttackOrSpell> isCol2Def = f -> col2KingdomIds.contains(f.getDefender_id()) || col2AllianceIds.contains(f.getDefender_aa());
+        Set<Integer> col1KingdomIds = attackers == null ? Collections.emptySet() : attackers.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col1AllianceIds = attackers == null ? Collections.emptySet() : attackers.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col2KingdomIds = defenders == null ? Collections.emptySet() : defenders.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col2AllianceIds = defenders == null ? Collections.emptySet() : defenders.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Predicate<AttackOrSpell> isCol1Att = f -> attackers == null || (col1KingdomIds.contains(f.getAttacker_id()) || col1AllianceIds.contains(f.getAttacker_aa()));
+        Predicate<AttackOrSpell> isCol2Att = f -> defenders == null || (col2KingdomIds.contains(f.getAttacker_id()) || col2AllianceIds.contains(f.getAttacker_aa()));
+        Predicate<AttackOrSpell> isCol1Def = f -> attackers == null || (col1KingdomIds.contains(f.getDefender_id()) || col1AllianceIds.contains(f.getDefender_aa()));
+        Predicate<AttackOrSpell> isCol2Def = f -> defenders == null || (col2KingdomIds.contains(f.getDefender_id()) || col2AllianceIds.contains(f.getDefender_aa()));
 
         List<AttackOrSpell> result = new ArrayList<>();
         for (DBAttack attack : allAttacks.values()) {
@@ -1753,6 +1793,70 @@ public class TrouncedDB extends DBMain {
 //                result.add(spell);
 //            }
 //        }
+        return result;
+    }
+
+    public void saveAidMap(MilitaryUnit unit, Map<Integer, Long> newValues, int realmId) {
+        if (newValues.isEmpty()) return;
+
+        Map<Integer, Long> previous = getAidMap(unit, realmId);
+        Map<Integer, Long> toSave = new LinkedHashMap<>();
+        for (Map.Entry<Integer, Long> entry : newValues.entrySet()) {
+            int kingdomId = entry.getKey();
+            long currentValue =  entry.getValue();
+            long previousValue = previous.getOrDefault(kingdomId, 0L);
+            if (previousValue == currentValue) continue;
+            toSave.put(kingdomId, currentValue);
+        }
+
+        int[] result;
+        String query = "INSERT OR REPLACE INTO AID_LEADERBOARD2 (id, unit, realm_id, amount) VALUES (?, ?, ?, ?)";
+        ThrowingBiConsumer<Map.Entry<Integer, Long>, PreparedStatement> setAid = new ThrowingBiConsumer<>() {
+            @Override
+            public void acceptThrows(Map.Entry<Integer, Long> aid, PreparedStatement stmt) throws Exception {
+                stmt.setInt(1, aid.getKey());
+                stmt.setInt(2, unit.ordinal());
+                stmt.setInt(3, realmId);
+                stmt.setLong(4, aid.getValue());
+            }
+        };
+
+        if (toSave.size() == 1) {
+            Map.Entry<Integer, Long> entry = toSave.entrySet().iterator().next();
+            result = new int[]{update(query, stmt -> setAid.accept(entry, stmt))};
+        } else {
+            result = executeBatch(toSave.entrySet(), query, setAid);
+        }
+
+        for (Map.Entry<Integer, Long> entry : toSave.entrySet()) {
+            int kingdomId = entry.getKey();
+            long amount = entry.getValue();
+            long previousAmount = previous.getOrDefault(kingdomId, 0L);
+            long change = amount - previousAmount;
+            DBKingdom kingdom = DBKingdom.get(kingdomId);
+            if (kingdom != null) {
+                Trocutus.imp().runEvent(new AnonymousAidEvent(kingdom, unit, change));
+            }
+        }
+
+    }
+
+    public Map<Integer, Long> getAidMap(MilitaryUnit unit, int realmId) {
+        Map<Integer, Long> result = new HashMap<>();
+        try (PreparedStatement stmt = prepareQuery("select * FROM AID_LEADERBOARD2 WHERE unit = ? AND realm_id = ?")) {
+            stmt.setInt(1, unit.ordinal());
+            stmt.setInt(2, realmId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int id = rs.getInt("id");
+                    long amount = rs.getLong("amount");
+                    result.put(id, amount);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
         return result;
     }
 

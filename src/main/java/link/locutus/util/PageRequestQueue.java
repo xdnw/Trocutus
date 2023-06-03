@@ -34,7 +34,10 @@ public class PageRequestQueue {
     }
 
     public void run() {
-        PageRequestTask task = queue.poll();
+        PageRequestTask task;
+        synchronized (queue) {
+            task = queue.poll();
+        }
         if (task != null) {
             lastRun = System.currentTimeMillis();
             Supplier supplier = task.getTask();
@@ -44,8 +47,16 @@ public class PageRequestQueue {
 
     public <T> PageRequestTask<T> submit(Supplier<T> task, int priority) {
         PageRequestTask<T> request = new PageRequestTask<T>(task, priority);
-        queue.add(request);
+        synchronized (queue) {
+            queue.add(request);
+        }
         return request;
+    }
+
+    public int size() {
+        synchronized (queue) {
+            return queue.size();
+        }
     }
 
     public static class PageRequestTask<T> extends CompletableFuture<T> {

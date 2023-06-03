@@ -2,6 +2,7 @@ package link.locutus.util;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
+import link.locutus.Trocutus;
 import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.TrouncedDB;
@@ -12,6 +13,7 @@ import link.locutus.core.db.entities.war.DBAttack;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import java.io.IOException;
 import java.lang.reflect.Type;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -28,6 +30,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class TrounceUtil {
@@ -466,7 +469,7 @@ public class TrounceUtil {
                 double percentDefenseIsSoldiers = (double) soldierDefence / (double) defenderDefense;
                 int soldierLosses = attack.defender_soldiers;
                 double factor = (double) soldierLosses / (percentDefenseIsSoldiers * attackerAttack);
-                factorsByUnit.computeIfAbsent(MilitaryUnit.SOLDIER, k -> new ArrayList<>()).add(factor);
+                factorsByUnit.computeIfAbsent(MilitaryUnit.SOLDIERS, k -> new ArrayList<>()).add(factor);
             }
 
             // Cavalry Defense
@@ -526,9 +529,39 @@ public class TrounceUtil {
             }
             System.out.println("\n\n");
         }
+    }
 
+    public static double getTaxrate(int sender_score, int receiver_score) {
+        return Math.min(Math.max(Math.abs((sender_score - receiver_score) / (double) (sender_score + receiver_score)), 0.1), 0.8);
+    }
 
-        // get spy ops
+    public static long applyTax(int sender_score, int receiver_score, long amount) {
+        double taxRate = getTaxrate(sender_score, receiver_score);
+        return Math.round(amount * taxRate / 100);
+    }
 
+    public static DBKingdom getNearestFey(int realmId, int land, int minScore, int maxScore, boolean fetch) {
+        if (fetch) {
+            try {
+                Trocutus.imp().getScraper().fetchFey(PagePriority.FETCH_FEY_FG, realmId, land);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        Set<DBKingdom> inRange = Trocutus.imp().getDB().getFeyMatching(kingdom -> {
+            if (kingdom.getRealm_id() != realmId) return false;
+            if (kingdom.getTotal_land() < minScore || kingdom.getTotal_land() > maxScore) return false;
+            return true;
+        });
+        DBKingdom closest = null;
+        long closestDistance = Long.MAX_VALUE;
+        for (DBKingdom kingdom : inRange) {
+            long distance = Math.abs(kingdom.getTotal_land() - land);
+            if (distance < closestDistance) {
+                closest = kingdom;
+                closestDistance = distance;
+            }
+        }
+        return closest;
     }
 }

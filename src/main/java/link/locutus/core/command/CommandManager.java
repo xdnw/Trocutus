@@ -8,10 +8,12 @@ import link.locutus.command.binding.SimpleValueStore;
 import link.locutus.command.binding.ValueStore;
 import link.locutus.command.binding.annotation.Command;
 import link.locutus.command.binding.annotation.Me;
+import link.locutus.command.binding.annotation.NoFormat;
 import link.locutus.command.binding.bindings.PrimitiveBindings;
 import link.locutus.command.binding.bindings.PrimitiveValidators;
 import link.locutus.command.binding.validator.ValidatorStore;
 import link.locutus.command.command.ArgumentStack;
+import link.locutus.command.command.CommandBehavior;
 import link.locutus.command.command.CommandCallable;
 import link.locutus.command.command.CommandGroup;
 import link.locutus.command.command.CommandUsageException;
@@ -19,6 +21,7 @@ import link.locutus.command.command.IMessageIO;
 import link.locutus.command.command.ParameterData;
 import link.locutus.command.command.ParametricCallable;
 import link.locutus.command.impl.discord.DiscordChannelIO;
+import link.locutus.command.impl.discord.DiscordHookIO;
 import link.locutus.command.impl.discord.binding.DiscordBindings;
 import link.locutus.command.impl.discord.binding.PermissionBinding;
 import link.locutus.command.impl.discord.binding.SheetBindings;
@@ -33,14 +36,21 @@ import link.locutus.core.db.guild.GuildKey;
 import link.locutus.core.db.guild.key.GuildSetting;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.DiscordUtil;
+import link.locutus.util.MathMan;
+import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.components.ActionRow;
+import net.dv8tion.jda.api.interactions.components.ItemComponent;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 
@@ -113,6 +123,7 @@ public class CommandManager extends ListenerAdapter {
         TrounceUtilCommands trounce_util_commands = new TrounceUtilCommands();
         HelpCommands help_commands = new HelpCommands();
         WarCommands war_commands = new WarCommands();
+        EmbedCommands embed_commands = new EmbedCommands();
 
         this.commands.registerMethod(admin_commands, List.of("admin"), "stop", "stop");
         this.commands.registerMethod(admin_commands, List.of("user"), "dm", "dm");
@@ -215,11 +226,13 @@ public class CommandManager extends ListenerAdapter {
         this.commands.registerMethod(kingdom_commands, List.of("kingdom"), "leftAA", "departures");
         this.commands.registerMethod(kingdom_commands, List.of("alliance"), "leftAA", "departures");
         this.commands.registerMethod(player_setting_commands, List.of("alert"), "loginNotifier", "login");
+        this.commands.registerMethod(player_setting_commands, List.of("alert", "opt_out"), "enemyAlertOptOut", "enemy_alert");
         this.commands.registerMethod(player_setting_commands, List.of("announcement"), "readAnnouncement", "read");
+
         this.commands.registerMethod(setting_commands, List.of("setting"), "info", "info");
         this.commands.registerMethod(setting_commands, List.of("setting"), "delete", "delete");
         this.commands.registerMethod(setting_commands, List.of("setting"), "sheets", "sheets");
-        this.commands.registerMethod(sheet_commands, List.of("sheet"), "counter", "counter");
+        this.commands.registerMethod(sheet_commands, List.of("war"), "counter", "counter");
         this.commands.registerMethod(sheet_commands, List.of("sheet", "blitz"), "validateSpyBlitzSheet", "validate");
         this.commands.registerMethod(sheet_commands, List.of("sheet"), "allianceKingdomsSheet", "allianceKingdoms");
         this.commands.registerMethod(sheet_commands, List.of("kingdom", "bp_mana"), "setBpMana", "set");
@@ -247,13 +260,21 @@ public class CommandManager extends ListenerAdapter {
         this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_optimal", "optimal");
         this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_land", "land");
         this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_top", "top");
+        this.commands.registerMethod(trounce_util_commands, List.of("fey"), "fey_strength", "strength");
 
-        this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "sync", "kingdom");
-        this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncMetrics", "metrics");
-        this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncInteractions", "interactions");
-        this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAlliances", "alliances");
-        this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAllianceKingdoms", "kingdoms_in_aa");
-        this.commands.registerMethod(new AdminCommands(), List.of("admin", "sync"), "syncAllKingdoms", "kingdoms");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "sync", "kingdom");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncMetrics", "metrics");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncInteractions", "interactions");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAlliances", "alliances");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAllianceKingdoms", "kingdoms_in_aa");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAllKingdoms", "kingdoms");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncSupport", "support");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncGlobalInteractions", "all_interactions");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncFey", "fey");
+
+        this.commands.registerMethod(embed_commands, List.of("embed", "template"), "targets", "targets");
+
+        this.commands.registerMethod(trounce_util_commands, List.of("aid", "path"), "findAidPath", "optimal");
 
         registerSettings();
 
@@ -261,11 +282,135 @@ public class CommandManager extends ListenerAdapter {
         this.commands.generatePojo("", output, 0);
         System.out.println(output);
 
+
+        for (ParametricCallable cmd : commands.getParametricCallables(f -> true)) {
+            for (ParameterData parameter : cmd.getParameters()) {
+                if (parameter.isConsumeFlag()) continue;
+            }
+
+        }
+
+
         return this;
     }
 
     public KingdomPlaceholders getKingdomPlaceholders() {
         return kingdomPlaceholders;
+    }
+
+    @Override
+    public void onButtonInteraction(@NotNull ButtonInteractionEvent event) {
+        try {
+            Message message = event.getMessage();
+            Button button = event.getButton();
+
+            if (message.getAuthor().getIdLong() != Settings.INSTANCE.APPLICATION_ID) {
+                return;
+            }
+
+
+            User user = event.getUser();
+            Guild guild = event.isFromGuild() ? event.getGuild() : message.isFromGuild() ? message.getGuild() : null;
+            MessageChannel channel = event.getChannel();
+
+            IMessageIO io = new DiscordHookIO(event.getHook());
+
+            String id = button.getId();
+            if (id == null) {
+                return;
+            }
+            if (id.isBlank()) {
+                RateLimitUtil.queue(message.delete());
+                return;
+            }
+            if (MathMan.isInteger(id)) {
+                List<MessageEmbed> embeds = message.getEmbeds();
+                if (embeds.size()  == 0) {
+                    io.send("No embed found: " + message.getJumpUrl());
+                    return;
+                }
+                Map<String, String> reactions = DiscordUtil.getReactions(message.getEmbeds().get(0));
+                if (reactions.isEmpty()) {
+                    io.send("No command info found: " + message.getJumpUrl());
+                    return;
+                }
+                String cmd = reactions.get(id);
+                if (cmd == null) {
+                    io.send("No command info found: " + message.getJumpUrl() + " | " + button.getId() + " | " + StringMan.getString(reactions));
+                    return;
+                }
+                id = cmd;
+            }
+
+            if (id.startsWith("<#")) {
+                String channelId = id.substring(0, id.indexOf('>') + 1);
+                channel = DiscordUtil.getChannel(message.getGuild(), channelId);
+                if (channel == null) {
+                    io.send("Unknown channel: <#" + channelId + ">");
+                    return;
+                } else {
+                    io = new DiscordChannelIO(channel);
+                }
+                id = id.substring(id.indexOf(' ') + 1);
+            }
+
+            CommandBehavior behavior = null;
+            if (id.length() > 0) {
+                char char0 = id.charAt(0);
+                behavior = CommandBehavior.getOrNull(char0 + "");
+                if (behavior != null) {
+                    id = id.substring(behavior.getValue().length());
+                } else {
+                    behavior = CommandBehavior.DELETE_MESSAGE;
+                }
+            }
+
+            RateLimitUtil.queue(event.deferEdit());
+
+            if (id.startsWith(Settings.INSTANCE.DISCORD.COMMAND.COMMAND_PREFIX)) {
+                String[] split = id.split("\\r?\\n(?=[" + Settings.INSTANCE.DISCORD.COMMAND.COMMAND_PREFIX + "|{])");
+                boolean success = false;
+                for (String cmd : split) {
+                    run(guild, event.getChannel(), user, event.getMessage(), io, cmd, true);
+                    success = true;
+                }
+                if (!success) behavior = null;
+            } else if (id.startsWith("{")){
+                run(guild, channel, user, message, io, id, true);
+            } else if (!id.isEmpty()) {
+                RateLimitUtil.queue(event.reply("Unknown command: " + id));
+                return;
+            }
+
+            if (behavior != null) {
+                switch (behavior) {
+                    case DELETE_MESSAGE -> {
+                        RateLimitUtil.queue(message.delete());
+                    }
+                    case UNDO_REACTION -> {
+                        // unsupported
+                    }
+                    case DELETE_REACTION -> {
+                        List<ActionRow> rows = new ArrayList<>(message.getActionRows());
+                        for (int i = 0; i < rows.size(); i++) {
+                            ActionRow row = rows.get(i);
+                            List<ItemComponent> components = new ArrayList<>(row.getComponents());
+                            if (components.remove(button)) {
+                                rows.set(i, ActionRow.of(components));
+                            }
+                        }
+                        rows.removeIf(f -> f.getComponents().isEmpty());
+                        RateLimitUtil.queue(message.editMessageComponents(rows));
+                    }
+                    case DELETE_REACTIONS -> {
+                        RateLimitUtil.queue(message.editMessageComponents(new ArrayList<>()));
+                    }
+                }
+            }
+
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -435,7 +580,9 @@ public class CommandManager extends ListenerAdapter {
             locals.addProvider(Key.of(User.class, Me.class), user);
         }
 
-        locals.addProvider(Key.of(IMessageIO.class, Me.class), io);
+        if (io != null) {
+            locals.addProvider(Key.of(IMessageIO.class, Me.class), io);
+        }
         if (fullCmdStr != null) {
             locals.addProvider(Key.of(JSONObject.class, Me.class), new JSONObject(fullCmdStr));
         }
@@ -490,6 +637,7 @@ public class CommandManager extends ListenerAdapter {
 
             if (callable instanceof ParametricCallable parametric) {
                 try {
+                    args = formatPlaceholders(locals, parametric, args);
                     ArgumentStack stack = new ArgumentStack(args, locals, validators, permisser);
                     handleCall(io, () -> {
                         Map<ParameterData, Map.Entry<String, Object>> map = parametric.parseArgumentsToMap(stack);
@@ -507,6 +655,32 @@ public class CommandManager extends ListenerAdapter {
         else task.run();
     }
 
+    private List<String> formatPlaceholders(LocalValueStore locals, ParametricCallable parametric, List<String> args) {
+        NoFormat noFormat = parametric.getMethod().getAnnotation(NoFormat.class);
+        if (noFormat != null) return args;
+        for (int i = 0; i < args.size(); i++) {
+            String arg = args.get(i);
+            if (arg.contains("{") && arg.contains("}")) {
+                arg = kingdomPlaceholders.format(locals, arg);
+                args.set(i, arg);
+            }
+        }
+        return args;
+    }
+
+    private Map<String, String> formatPlaceholders(LocalValueStore locals, ParametricCallable parametric, Map<String, String> args) {
+        NoFormat noFormat = parametric.getMethod().getAnnotation(NoFormat.class);
+        if (noFormat != null) return args;
+        for (Map.Entry<String, String> entry : args.entrySet()) {
+            String arg = entry.getValue();
+            if (arg.contains("{") && arg.contains("}")) {
+                arg = kingdomPlaceholders.format(locals, arg);
+                entry.setValue(arg);
+            }
+        }
+        return args;
+    }
+
     public void run(@Nullable Guild guild, @Nullable MessageChannel channel, @Nullable User user, @Nullable Message message, IMessageIO io, String path, Map<String, String> arguments, boolean async) {
         LocalValueStore existingLocals = createLocals(null, guild, channel, user, message, io, null);
         run(existingLocals, io, path, arguments, async);
@@ -522,9 +696,10 @@ public class CommandManager extends ListenerAdapter {
                     return;
                 }
 
-                Map<String, String> argsAndCmd = new HashMap<>(arguments);
+                Map<String, String> formatted = callable instanceof ParametricCallable ? formatPlaceholders(existingLocals, (ParametricCallable) callable, arguments) : arguments;
+                Map<String, String> argsAndCmd = new HashMap<>(formatted);
                 argsAndCmd.put("", path);
-                Map<String, String> finalArguments = new LinkedHashMap<>(arguments);
+                Map<String, String> finalArguments = new LinkedHashMap<>(formatted);
                 finalArguments.remove("");
 
                 LocalValueStore<Object> finalLocals = createLocals(existingLocals, null, null, null, null, io, argsAndCmd);

@@ -2,6 +2,8 @@ package link.locutus.core.db.entities.alliance;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import link.locutus.Trocutus;
+import link.locutus.command.binding.annotation.Command;
+import link.locutus.core.api.Auth;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.kingdom.KingdomOrAlliance;
@@ -59,6 +61,11 @@ public class DBAlliance implements KingdomOrAlliance {
         this.level_total = level_total;
     }
 
+   @Command
+   public double getLevelPct() {
+        return level + (double) experience / level_total;
+   }
+
     public static DBAlliance parse(String input) {
         if (MathMan.isInteger(input)) {
             DBAlliance aa = Trocutus.imp().getDB().getAlliance(Integer.parseInt(input));
@@ -95,6 +102,16 @@ public class DBAlliance implements KingdomOrAlliance {
             result.add(alliance);
         }
         return result;
+    }
+
+    public Auth getAuth(Rank rank) {
+        for (DBKingdom kingdom : getKingdoms(f -> f.getPosition().ordinal() >= rank.ordinal())) {
+            Auth auth = kingdom.getAuth();
+            if (auth != null) {
+                return auth;
+            }
+        }
+        return null;
     }
 
 

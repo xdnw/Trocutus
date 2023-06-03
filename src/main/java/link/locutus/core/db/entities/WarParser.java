@@ -12,6 +12,7 @@ import link.locutus.util.TrounceUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -28,13 +29,13 @@ public class WarParser {
     public static WarParser of(String col1, String col2, Collection<KingdomOrAlliance> attackers, Collection<KingdomOrAlliance> defenders, long start, long end) {
         List<AttackOrSpell> spells = Trocutus.imp().getDB().getAttackOrSpells(attackers, defenders, start, end);
 
-        Set<Integer> col1KingdomIds = attackers.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
-        Set<Integer> col1AllianceIds = attackers.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
-        Set<Integer> col2KingdomIds = defenders.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
-        Set<Integer> col2AllianceIds = defenders.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col1KingdomIds = attackers == null ? Collections.emptySet() : attackers.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col1AllianceIds = attackers == null ? Collections.emptySet() : attackers.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col2KingdomIds = defenders == null ? Collections.emptySet() : defenders.stream().filter(f -> f.isKingdom()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
+        Set<Integer> col2AllianceIds = defenders == null ? Collections.emptySet() : defenders.stream().filter(f -> f.isAlliance()).map(KingdomOrAlliance::getId).collect(Collectors.toSet());
 
-        Predicate<AttackOrSpell> isCol1 = f -> col1KingdomIds.contains(f.getAttacker_id()) || col1AllianceIds.contains(f.getAttacker_aa());
-        Predicate<AttackOrSpell> isCol2 = f -> col2KingdomIds.contains(f.getAttacker_id()) || col2AllianceIds.contains(f.getAttacker_aa());
+        Predicate<AttackOrSpell> isCol1 = f -> attackers == null || (col1KingdomIds.contains(f.getAttacker_id()) || col1AllianceIds.contains(f.getAttacker_aa()));
+        Predicate<AttackOrSpell> isCol2 = f -> defenders == null || (col2KingdomIds.contains(f.getAttacker_id()) || col2AllianceIds.contains(f.getAttacker_aa()));
 
         return new WarParser(col1, col2, spells, isCol1, isCol2);
     }

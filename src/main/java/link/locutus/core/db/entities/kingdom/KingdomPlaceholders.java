@@ -1,5 +1,6 @@
 package link.locutus.core.db.entities.kingdom;
 
+import com.google.gson.reflect.TypeToken;
 import link.locutus.command.binding.Key;
 import link.locutus.command.binding.ValueStore;
 import link.locutus.command.binding.annotation.Me;
@@ -9,6 +10,7 @@ import link.locutus.command.command.CommandCallable;
 import link.locutus.command.command.CommandUsageException;
 import link.locutus.command.command.ParametricCallable;
 import link.locutus.command.perm.PermissionHandler;
+import link.locutus.core.db.entities.alliance.DBRealm;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
@@ -116,7 +118,9 @@ public class KingdomPlaceholders extends Placeholders<DBKingdom> {
 
     public String format(ValueStore<?> store, String arg) {
         User author = store.getProvided(Key.of(User.class, Me.class));
-        DBKingdom me = store.getProvided(Key.of(DBKingdom.class, Me.class));
+        Map<DBRealm, DBKingdom> myKingdoms = store.getProvided(Key.of(TypeToken.getParameterized(Map.class, DBRealm.class, DBKingdom.class).getType(), Me.class));
+        // todo fix
+        DBKingdom me = myKingdoms.size() == 1 ? myKingdoms.values().iterator().next() : null;
 
         if (author != null && arg.contains("%user%")) {
             arg = arg.replace("%user%", author.getAsMention());

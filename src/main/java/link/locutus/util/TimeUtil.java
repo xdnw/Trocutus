@@ -192,8 +192,6 @@ public class TimeUtil {
     public static long getTimeFromTurn(long turn) {
         long day = (turn / 24);
         long hour = turn - (day * 24);
-
-//        (utc.getHour() / 2) + getDay(utc) * 12L;
         ZonedDateTime time = Instant.ofEpochMilli(0).atZone(ZoneOffset.UTC).plusDays(day).plusHours(hour);
         long millisecond = time.toEpochSecond() * 1000L;
         return millisecond;
@@ -204,7 +202,7 @@ public class TimeUtil {
     }
 
     public static long getDayTurn() {
-        return ZonedDateTime.now(ZoneOffset.UTC).getHour() / 2;
+        return ZonedDateTime.now(ZoneOffset.UTC).getHour();
     }
 
     public static long getDay() {

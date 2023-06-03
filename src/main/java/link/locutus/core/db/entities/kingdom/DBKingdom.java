@@ -5,8 +5,10 @@ import link.locutus.Trocutus;
 import link.locutus.command.binding.LocalValueStore;
 import link.locutus.command.binding.ValueStore;
 import link.locutus.command.binding.annotation.Command;
+import link.locutus.command.binding.annotation.Me;
 import link.locutus.command.command.CommandResult;
 import link.locutus.command.command.StringMessageIO;
+import link.locutus.core.api.Auth;
 import link.locutus.core.api.ScrapeKingdomUpdater;
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.api.game.HeroType;
@@ -25,6 +27,7 @@ import link.locutus.util.MathMan;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.TrounceUtil;
 import link.locutus.util.spreadsheet.SpreadSheet;
+import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
@@ -261,9 +264,10 @@ public class DBKingdom implements KingdomOrAlliance {
     private HeroType hero;
     private int hero_level;
     private long last_fetched;
+    private boolean is_fey;
     private Int2ObjectArrayMap<byte[]> metaCache;
 
-    public DBKingdom(int id, int realmId, int allianceId, Rank permission, String name, String slug, int totalLand, int alertLevel, int resourceLevel, int spellAlert, long lastActive, long vacationStart, HeroType hero, int heroLevel, long last_fetched) {
+    public DBKingdom(int id, int realmId, int allianceId, Rank permission, String name, String slug, int totalLand, int alertLevel, int resourceLevel, int spellAlert, long lastActive, long vacationStart, HeroType hero, int heroLevel, long last_fetched, boolean isFey) {
         this.id = id;
         this.realm_id = realmId;
         this.alliance_id = allianceId;
@@ -279,6 +283,7 @@ public class DBKingdom implements KingdomOrAlliance {
         this.hero = hero;
         this.hero_level = heroLevel;
         this.last_fetched = last_fetched;
+        this.is_fey = isFey;
     }
 
     public String getApiKey() {
@@ -288,6 +293,11 @@ public class DBKingdom implements KingdomOrAlliance {
     @Command
     public int getId() {
         return id;
+    }
+
+    @Command
+    public boolean isFey() {
+        return is_fey;
     }
 
     @Command
@@ -333,6 +343,7 @@ public class DBKingdom implements KingdomOrAlliance {
         return position;
     }
 
+
     public User getUser() {
         Long user = Trocutus.imp().getDB().getUserIdFromKingdomId(id);
         if (user != null) {
@@ -368,6 +379,11 @@ public class DBKingdom implements KingdomOrAlliance {
     @Command
     public ResourceLevel getResource_level() {
         return ResourceLevel.values[resource_level];
+    }
+
+    @Command
+    public int getResource_levelId() {
+        return resource_level;
     }
 
     @Command
@@ -408,7 +424,7 @@ public class DBKingdom implements KingdomOrAlliance {
     }
 
     public DBKingdom copy() {
-        return new DBKingdom(id, realm_id, alliance_id, position, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched);
+        return new DBKingdom(id, realm_id, alliance_id, position, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched, is_fey);
     }
 
     public Map.Entry<CommandResult, String> runCommandInternally(Guild guild, User user, String command) {
@@ -625,17 +641,51 @@ public class DBKingdom implements KingdomOrAlliance {
     }
 
     @Command
+    public boolean isOfflineOrAway() {
+        User user = getUser();
+        if (user != null) {
+            for (Guild guild : user.getMutualGuilds()) {
+                Member member = guild.getMember(user);
+                if (member != null) {
+                    if (member.getOnlineStatus() != OnlineStatus.OFFLINE && member.getOnlineStatus() != OnlineStatus.INVISIBLE && member.getOnlineStatus() != OnlineStatus.IDLE) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return last_active < System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(15);
+    }
+
     public int getAttackStrength() {
-        AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
-        if (strength != null) return strength.stats.attack;
+        return getAttackStrength(null);
+    }
+
+    @Command
+    public int getAttackStrength(@Me Map<DBRealm, DBKingdom> me) {
+        if (me != null) {
+            boolean canView = me.values().stream().map(DBKingdom::getAlliance_id).anyMatch(f -> f == getAlliance_id());
+            if (canView) {
+                AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
+                if (strength != null) return strength.stats.attack;
+            }
+        }
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.attack;
     }
 
-    @Command
     public int getDefenseStrength() {
-        AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
-        if (strength != null) return strength.stats.defense;
+        return getDefenseStrength(null);
+    }
+
+    @Command
+    public int getDefenseStrength(@Me Map<DBRealm, DBKingdom> me) {
+        if (me != null) {
+            boolean canView = me.values().stream().map(DBKingdom::getAlliance_id).anyMatch(f -> f == getAlliance_id());
+            if (canView) {
+                AllianceMembers.AllianceMember strength = Trocutus.imp().getScraper().getAllianceMemberStrength(realm_id, id);
+                if (strength != null) return strength.stats.defense;
+            }
+        }
         DBSpy report = getLatestSpyReport();
         return report == null ? total_land * 10 : report.defense;
     }
@@ -852,11 +902,11 @@ public class DBKingdom implements KingdomOrAlliance {
         return Trocutus.imp().getDB().getLatestAttack(id);
     }
 
-    public String getInfoRowMarkdown(String slug, boolean calculateUnitsFromAttacks) {
-        return getInfoRowMarkdown(slug, calculateUnitsFromAttacks, true, true);
+    public String getInfoRowMarkdown(String slug, boolean calculateUnitsFromAttacks, boolean includeApiData) {
+        return getInfoRowMarkdown(slug, calculateUnitsFromAttacks, includeApiData, true, true);
     }
-    public String getInfoRowMarkdown(String slug, boolean calculateUnitsFromAttacks, boolean title, boolean alert) {
-        DBKingdom.HoldingInfo info = getHoldings(calculateUnitsFromAttacks);
+    public String getInfoRowMarkdown(String slug, boolean calculateUnitsFromAttacks, boolean includeApiData, boolean title, boolean alert) {
+        DBKingdom.HoldingInfo info = getHoldings(calculateUnitsFromAttacks, includeApiData);
         StringBuilder response = new StringBuilder();
         if (title) {
             response.append("__**" + getName() + " | " + getAllianceName() + ":**__ " + getTotal_land() + " ns\n");
@@ -889,6 +939,13 @@ public class DBKingdom implements KingdomOrAlliance {
         return response.toString();
     }
 
+    public Auth getAuth() {
+        User user = getUser();
+        if (user == null) return null;
+        Auth auth = Trocutus.imp().getDB().getAuth(user.getIdLong());
+        return auth;
+    }
+
     public static record HoldingInfo(long dateGold, long dateUnits, Map<MilitaryUnit, Long> units) {
         public int getAttack(HeroType hero) {
             return MilitaryUnit.getAttack(units, hero);
@@ -898,7 +955,7 @@ public class DBKingdom implements KingdomOrAlliance {
             return MilitaryUnit.getDefense(units, hero);
         }
     }
-    public HoldingInfo getHoldings(boolean calculateUnitsFromAttacks) {
+    public HoldingInfo getHoldings(boolean calculateUnitsFromAttacks, boolean includeApiData) {
         ScrapeKingdomUpdater scraper = Trocutus.imp().getScraper();
         Map<MilitaryUnit, Long> result = new EnumMap<>(MilitaryUnit.class);
 
@@ -908,9 +965,9 @@ public class DBKingdom implements KingdomOrAlliance {
         long dateUnits = 0;
         long dateGold = 0;
 
-        AllianceMembers.AllianceMember cached = scraper.getAllianceMemberStrength(realm_id, id);
+        AllianceMembers.AllianceMember cached = includeApiData ? scraper.getAllianceMemberStrength(realm_id, id) : null;
         if (cached != null) {
-            result.put(MilitaryUnit.SOLDIER, (long) cached.army.soldiers);
+            result.put(MilitaryUnit.SOLDIERS, (long) cached.army.soldiers);
             result.put(MilitaryUnit.ARCHER, (long) cached.army.archers);
             result.put(MilitaryUnit.CAVALRY, (long) cached.army.cavalry);
             result.put(MilitaryUnit.ELITE, (long) cached.army.elites);
@@ -928,7 +985,7 @@ public class DBKingdom implements KingdomOrAlliance {
         }
 
         if (spy != null) {
-            result.putIfAbsent(MilitaryUnit.SOLDIER, (long) spy.soldiers);
+            result.putIfAbsent(MilitaryUnit.SOLDIERS, (long) spy.soldiers);
             result.putIfAbsent(MilitaryUnit.ARCHER, (long) spy.archers);
             result.putIfAbsent(MilitaryUnit.CAVALRY, (long) spy.cavalry);
             result.putIfAbsent(MilitaryUnit.ELITE, (long) spy.elites);

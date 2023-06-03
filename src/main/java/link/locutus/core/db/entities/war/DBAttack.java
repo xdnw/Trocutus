@@ -1,12 +1,9 @@
 package link.locutus.core.db.entities.war;
 
-import link.locutus.core.api.game.AttackOrSpell;
 import link.locutus.core.api.game.AttackOrSpellType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.pojo.pages.AttackInteraction;
 import link.locutus.core.db.entities.AbstractAttackOrSpell;
-import link.locutus.core.db.entities.alliance.DBAlliance;
-import link.locutus.core.db.entities.kingdom.DBKingdom;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -67,7 +64,7 @@ public final class DBAttack extends AbstractAttackOrSpell {
     public Map<MilitaryUnit, Long> getCost(boolean isAttacker) {
         Map<MilitaryUnit, Long> result = new LinkedHashMap<>();
         if (isAttacker) {
-            if (attacker_soldiers != 0) result.put(MilitaryUnit.SOLDIER, (long) attacker_soldiers);
+            if (attacker_soldiers != 0) result.put(MilitaryUnit.SOLDIERS, (long) attacker_soldiers);
             if (attacker_cavalry != 0) result.put(MilitaryUnit.CAVALRY, (long) attacker_cavalry);
             if (attacker_archers != 0) result.put(MilitaryUnit.ARCHER, (long) attacker_archers);
             if (attacker_elites != 0) result.put(MilitaryUnit.ELITE, (long) attacker_elites);
@@ -76,7 +73,7 @@ public final class DBAttack extends AbstractAttackOrSpell {
             if (atkHeroExp != 0) result.put(MilitaryUnit.EXP, (long) -atkHeroExp);
             result.put(MilitaryUnit.BATTLE_POINTS, 200L);
         } else {
-            if (defender_soldiers != 0) result.put(MilitaryUnit.SOLDIER, (long) defender_soldiers);
+            if (defender_soldiers != 0) result.put(MilitaryUnit.SOLDIERS, (long) defender_soldiers);
             if (defender_cavalry != 0) result.put(MilitaryUnit.CAVALRY, (long) defender_cavalry);
             if (defender_archers != 0) result.put(MilitaryUnit.ARCHER, (long) defender_archers);
             if (defender_elites != 0) result.put(MilitaryUnit.ELITE, (long) defender_elites);

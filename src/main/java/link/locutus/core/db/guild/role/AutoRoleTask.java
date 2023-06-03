@@ -459,18 +459,19 @@ public class AutoRoleTask implements IAutoRoleTask {
                         .filter(f -> f.getPosition().ordinal() >= autoRoleRank.ordinal())
                         .map(DBKingdom::getAlliance_id)
                         .filter(f -> f != 0 && allowedAAs.apply(f)).collect(Collectors.toSet());
+
                 if (!allianceRoles.isEmpty() && position == -1) {
                     position = allianceRoles.values().iterator().next().getPosition();
                 }
                 Set<Integer> currentAARole = memberAACache2.get(member.getIdLong());
-
-
 
                 if (currentAARole != null && currentAARole.equals(alliancesToGrant) && autoAll) {
                     return;
                 } else {
                     memberAACache2.put(member.getIdLong(), new HashSet<>(alliancesToGrant));
                 }
+
+                if (currentAARole == null) currentAARole = new HashSet<>();
 
                 Set<Integer> toRemove = new HashSet<>(currentAARole);
                 toRemove.removeAll(alliancesToGrant);
@@ -491,11 +492,13 @@ public class AutoRoleTask implements IAutoRoleTask {
                         role = createRole(position, guild, alliance_id, name);
                         if (role != null) {
                             allianceRoles.put(alliance_id, role);
+                        } else {
+                            continue;
                         }
-                        if (!autoAll)
-                            output.accept("Add " + role.getName() + " to " + member.getEffectiveName());
-                        tasks.accept(RateLimitUtil.queue(guild.addRoleToMember(member, role)));
                     }
+                    if (!autoAll)
+                        output.accept("Add " + role.getName() + " to " + member.getEffectiveName());
+                    tasks.accept(RateLimitUtil.queue(guild.addRoleToMember(member, role)));
                 }
             } else isRegistered = false;
         }

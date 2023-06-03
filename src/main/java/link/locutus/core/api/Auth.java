@@ -2,6 +2,7 @@ package link.locutus.core.api;
 
 import link.locutus.Trocutus;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.settings.Settings;
 import link.locutus.util.FileUtil;
 import link.locutus.util.PagePriority;
 import link.locutus.util.TrounceUtil;
@@ -17,6 +18,13 @@ import java.util.concurrent.Future;
 import java.util.function.Function;
 
 public class Auth {
+
+    public static void main(String[] args) throws IOException {
+        Settings.INSTANCE.reload(Settings.INSTANCE.getDefaultFile());
+//        Auth auth = new Auth(664156861033086987L, "test", "blah");
+        Auth auth = new Auth(664156861033086987L, Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
+        auth.login(true);
+    }
     private final String password;
     private final String username;
     private final long userId;
@@ -66,15 +74,18 @@ public class Auth {
             String url = "https://trounced.net/login";
 
             String loginResult = FileUtil.get(FileUtil.readStringFromURL(PagePriority.LOGIN.ordinal(), url, userPass, this.getCookieManager()));
-            if (!loginResult.contains("Redirecting to")) {
+            if (loginResult.contains("<meta http-equiv=\"refresh\" content=\"0;url='https://trounced.net/dashboard'\" />")) {
+                loggedIn = true;
+                return;
+            } else {
                 Document dom = Jsoup.parse(loginResult);
                 String userTrunc = getUsername();
                 if (userTrunc.contains("@")) {
                     userTrunc = getUsername().charAt(0) + "..." + getUsername().split("@")[1];
                 }
-                throw new IllegalArgumentException("Error: Failed to login `" + userTrunc + "`\n" + TrounceUtil.getAlert(dom));
+                boolean containsLogin = loginResult.contains("<meta http-equiv=\"refresh\" content=\"0;url='https://trounced.net/login'\" />");
+                throw new IllegalArgumentException("Error: Failed to login `" + userTrunc + "`\n" + TrounceUtil.getAlert(dom) + "\nRedirect: " + containsLogin);
             }
-            loggedIn = true;
         }
     }
 

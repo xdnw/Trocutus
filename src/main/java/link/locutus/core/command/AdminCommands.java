@@ -2,7 +2,6 @@ package link.locutus.core.command;
 
 import link.locutus.Trocutus;
 import link.locutus.command.binding.annotation.Command;
-import link.locutus.command.binding.annotation.Default;
 import link.locutus.command.binding.annotation.Me;
 import link.locutus.command.binding.annotation.Switch;
 import link.locutus.command.command.IMessageIO;
@@ -11,7 +10,6 @@ import link.locutus.core.api.alliance.AllianceMetric;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
-import link.locutus.core.db.entities.kingdom.KingdomLootType;
 import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.entities.Roles;
@@ -19,7 +17,6 @@ import link.locutus.core.db.guild.key.GuildSetting;
 import link.locutus.util.PagePriority;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
-import link.locutus.util.TimeUtil;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
@@ -30,7 +27,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -42,6 +38,37 @@ public class AdminCommands {
         AllianceMetric.update();
         return "Done!";
     }
+
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
+    public String syncFey(int realm, int landStart, int landEnd, double multiplier) throws IOException {
+        int updated = 0;
+        for (int land = landStart; land <= landEnd; land *= multiplier) {
+            updated += Trocutus.imp().getScraper().fetchFey(PagePriority.FETCH_FEY_BG, realm, land).size();
+        }
+        return "Done! (updated: " + updated + ")";
+    }
+
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
+    public String syncSupport(int realm, MilitaryUnit unit) {
+        try {
+            Trocutus.imp().getScraper().fetchAid(realm, unit);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return "Done!";
+    }
+
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
+    public String syncGlobalInteractions(int realm) {
+        for (DBKingdom kingdom : Trocutus.imp().getDB().getKingdomsMatching(f -> true)) {
+            Trocutus.imp().getScraper().updateKingdomInteractions(kingdom, 1, null);;
+        }
+        return "Done!";
+    }
+
     @Command(aliases = {"setloot"})
     @RolePermission(value = Roles.ADMIN, root = true)
     public String setUnits(@Me IMessageIO channel, @Me Map<DBRealm, DBKingdom> me, DBKingdom nation, Map<MilitaryUnit, Long> units, int attack, int defense) {
@@ -54,7 +81,7 @@ public class AdminCommands {
                 units.getOrDefault(MilitaryUnit.GOLD, 0L).intValue(),
                 attack,
                 defense,
-                units.getOrDefault(MilitaryUnit.SOLDIER, 0L).intValue(),
+                units.getOrDefault(MilitaryUnit.SOLDIERS, 0L).intValue(),
                 units.getOrDefault(MilitaryUnit.CAVALRY, 0L).intValue(),
                 units.getOrDefault(MilitaryUnit.ARCHER, 0L).intValue(),
                 units.getOrDefault(MilitaryUnit.ELITE, 0L).intValue(),
@@ -114,7 +141,7 @@ public class AdminCommands {
     public String syncInteractions() throws IOException {
         long start = System.currentTimeMillis();
         for (DBRealm realm : Trocutus.imp().getDB().getRealms().values()) {
-            Trocutus.imp().getScraper().updateAllianceInteractions(realm.getId());
+            Trocutus.imp().getScraper().updateAllianceInteractions(Trocutus.imp().rootAuth(), realm.getId());
         }
         return "Updated interactions in " + (System.currentTimeMillis() - start) + "ms";
     }

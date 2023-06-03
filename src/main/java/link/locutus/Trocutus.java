@@ -5,6 +5,7 @@ import link.locutus.core.api.ApiKeyPool;
 import link.locutus.core.api.Auth;
 import link.locutus.core.api.TrouncedApi;
 import link.locutus.core.api.ScrapeKingdomUpdater;
+import link.locutus.core.api.alliance.AllianceMetric;
 import link.locutus.core.command.CommandManager;
 import link.locutus.core.command.TrouncedSlash;
 import link.locutus.core.db.TrouncedDB;
@@ -16,6 +17,7 @@ import link.locutus.core.event.Event;
 import link.locutus.core.event.MainListener;
 import link.locutus.core.event.listener.AllianceListener;
 import link.locutus.core.event.listener.KingdomListener;
+import link.locutus.core.event.listener.TreatyListener;
 import link.locutus.core.settings.Settings;
 import link.locutus.util.GuildShardManager;
 import link.locutus.util.RateLimitUtil;
@@ -64,13 +66,15 @@ public class Trocutus extends ListenerAdapter {
         Trocutus instance = new Trocutus();
         instance.start();
 
-        TrounceUtil.test();;
+        AllianceMetric.updateLegacy();
+
+        System.out.println("Updated metrics legacy");
+
         Settings.INSTANCE.save(Settings.INSTANCE.getDefaultFile());
     }
 
     private static Trocutus INSTANCE;
     private final CommandManager commandManager;
-    private final Logger logger;
     private GuildShardManager manager;
     private final AsyncEventBus eventBus;
     private final TrouncedDB rootDb;
@@ -85,7 +89,6 @@ public class Trocutus extends ListenerAdapter {
             throw new IllegalStateException("COMMAND_PREFIX cannot be `.` or `_` or `~` in " + Settings.INSTANCE.getDefaultFile());
         }
 
-        this.logger = Logger.getLogger("LOCUTUS");
         this.eventBus = new AsyncEventBus("locutus", Runnable::run);
         this.executor = Executors.newCachedThreadPool();
         this.scheduler = new ScheduledThreadPoolExecutor(256);
@@ -116,7 +119,7 @@ public class Trocutus extends ListenerAdapter {
 
         this.rootAuth = new Auth(Settings.INSTANCE.ADMIN_USER_ID, Settings.INSTANCE.USERNAME, Settings.INSTANCE.PASSWORD);
         this.scraper = new ScrapeKingdomUpdater(this.rootAuth, this.rootDb);
-        for (DBKingdom kingdom : this.scraper.updateSelf()) {
+        for (DBKingdom kingdom : this.scraper.updateSelf(this.rootAuth)) {
             if (Settings.INSTANCE.ADMIN_USER_ID > 0) {
                 rootDb.saveUser(Settings.INSTANCE.ADMIN_USER_ID, kingdom);
             }
@@ -145,6 +148,7 @@ public class Trocutus extends ListenerAdapter {
         eventBus.register(new MainListener());
         eventBus.register(new KingdomListener());
         eventBus.register(new AllianceListener());
+        eventBus.register(new TreatyListener());
     }
 
     public void start() throws InterruptedException {
