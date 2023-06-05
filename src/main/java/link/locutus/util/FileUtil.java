@@ -239,7 +239,7 @@ public final class FileUtil {
                     return null;
                 }
             }
-        }, priority);
+        }, orderedPriority);
         return task;
     }
 

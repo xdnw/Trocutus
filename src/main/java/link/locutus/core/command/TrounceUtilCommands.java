@@ -290,4 +290,17 @@ public class TrounceUtilCommands {
     }
 
     private static record SendPathNode(SendPathNode parent, double remainingPct, DBKingdom kingdom, int intermediaryIndex) { }
+
+    @Command
+    public String landCost(int from, @Default Integer to) {
+        StringBuilder result = new StringBuilder();
+        long costPerAcre = TrounceUtil.getLandCost(from);
+
+        result.append("$" + MathMan.format(costPerAcre) + " per acre\n");
+        if (to != null) {
+            long total = TrounceUtil.getLandCost(from, to);
+            result.append("$" + MathMan.format(total) + " for " + MathMan.format(to) + " acres\n");
+        }
+        return result.toString();
+    }
 }

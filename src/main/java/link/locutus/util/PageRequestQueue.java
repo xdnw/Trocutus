@@ -45,7 +45,7 @@ public class PageRequestQueue {
         }
     }
 
-    public <T> PageRequestTask<T> submit(Supplier<T> task, int priority) {
+    public <T> PageRequestTask<T> submit(Supplier<T> task, long priority) {
         PageRequestTask<T> request = new PageRequestTask<T>(task, priority);
         synchronized (queue) {
             queue.add(request);

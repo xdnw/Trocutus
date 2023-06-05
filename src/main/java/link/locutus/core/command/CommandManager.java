@@ -125,6 +125,8 @@ public class CommandManager extends ListenerAdapter {
         WarCommands war_commands = new WarCommands();
         EmbedCommands embed_commands = new EmbedCommands();
 
+        this.commands.registerMethod(trounce_util_commands, List.of("land"), "landCost", "cost");
+
         this.commands.registerMethod(admin_commands, List.of("admin"), "dumpWiki", "dump_wiki");
         this.commands.registerMethod(admin_commands, List.of("admin"), "stop", "stop");
         this.commands.registerMethod(admin_commands, List.of("user"), "dm", "dm");

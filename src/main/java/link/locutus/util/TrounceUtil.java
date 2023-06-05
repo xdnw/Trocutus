@@ -55,6 +55,24 @@ public class TrounceUtil {
         return alliance.getName();
     }
 
+    public static long getLandCost(int start) {
+        return Math.round(4.3816269236233213e-7 * start * start + 0.20511814302942483 * start - 105.93918145282488);
+    }
+
+    public static long getLandCost(int from, int to) {
+        if (from < 0 || from == to) return 0;
+        if (to <= from) return 0;
+        if (to > 1000000) throw new IllegalArgumentException("Land cannot exceed 1000000");
+        // in groups of 1000
+        long total = 0;
+        for (double i = from; i < to; i += 1000) {
+            long cost = getLandCost((int) i);
+            double amt = Math.min(1000, to - i);
+            total += cost * amt;
+        }
+        return total;
+    }
+
     public static Map<MilitaryUnit, Long> toConvertedCost(Map<MilitaryUnit, Long> input) {
         Map<MilitaryUnit, Long> convertedCost = new EnumMap<>(MilitaryUnit.class);
         for (Map.Entry<MilitaryUnit, Long> entry : input.entrySet()) {
