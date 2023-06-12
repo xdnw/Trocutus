@@ -10,6 +10,8 @@ Useful links:
  - [Arguments](https://github.com/xdnw/Trocutus/wiki/arguments)
  - [Placeholders](https://github.com/xdnw/Trocutus/wiki/kingdom_placeholders)
 
+See also: [Trounced Player Guide](https://docs.google.com/document/d/1iPGLiZ6CShfiDn3AXRJNjD7Il66WijbUoYW1YyrOdY8)
+
 ## Compiling
 Download Java JDK 17 (or newer)
 https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html
