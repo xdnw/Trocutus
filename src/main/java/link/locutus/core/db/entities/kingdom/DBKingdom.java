@@ -15,6 +15,7 @@ import link.locutus.core.api.game.HeroType;
 import link.locutus.core.api.game.MilitaryUnit;
 import link.locutus.core.api.game.ResourceLevel;
 import link.locutus.core.api.pojo.pages.AllianceMembers;
+import link.locutus.core.api.pojo.pages.AlliancePage;
 import link.locutus.core.db.entities.Activity;
 import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.alliance.DBRealm;
@@ -51,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 public class DBKingdom implements KingdomOrAlliance {
+
     @Deprecated
     public DBKingdom() {
         id = 0;
@@ -265,9 +267,10 @@ public class DBKingdom implements KingdomOrAlliance {
     private int hero_level;
     private long last_fetched;
     private boolean is_fey;
+    private long contributeDate;
     private Int2ObjectArrayMap<byte[]> metaCache;
 
-    public DBKingdom(int id, int realmId, int allianceId, Rank permission, String name, String slug, int totalLand, int alertLevel, int resourceLevel, int spellAlert, long lastActive, long vacationStart, HeroType hero, int heroLevel, long last_fetched, boolean isFey) {
+    public DBKingdom(int id, int realmId, int allianceId, Rank permission, String name, String slug, int totalLand, int alertLevel, int resourceLevel, int spellAlert, long lastActive, long vacationStart, HeroType hero, int heroLevel, long last_fetched, long contributeDate, boolean isFey) {
         this.id = id;
         this.realm_id = realmId;
         this.alliance_id = allianceId;
@@ -424,7 +427,7 @@ public class DBKingdom implements KingdomOrAlliance {
     }
 
     public DBKingdom copy() {
-        return new DBKingdom(id, realm_id, alliance_id, position, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched, is_fey);
+        return new DBKingdom(id, realm_id, alliance_id, position, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched, contributeDate, is_fey);
     }
 
     public Map.Entry<CommandResult, String> runCommandInternally(Guild guild, User user, String command) {
@@ -944,6 +947,16 @@ public class DBKingdom implements KingdomOrAlliance {
         if (user == null) return null;
         Auth auth = Trocutus.imp().getDB().getAuth(user.getIdLong());
         return auth;
+    }
+
+    public boolean setContributeDate(long timestamp) {
+        if (timestamp < this.contributeDate) return false;
+        this.contributeDate = timestamp;
+        return true;
+    }
+
+    public long getContributeDate() {
+        return contributeDate;
     }
 
     public static record HoldingInfo(long dateGold, long dateUnits, Map<MilitaryUnit, Long> units) {

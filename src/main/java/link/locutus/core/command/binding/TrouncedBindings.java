@@ -164,7 +164,7 @@ public class TrouncedBindings extends BindingHelper {
         throw new UnsupportedOperationException("No GuildDB binding provided in command locals");
     }
 
-    @Binding(value = "A nation or alliance name, url or id. Prefix with `AA:` or `nation:` to avoid ambiguity if there exists both by the same name or id", examples = {"Borg", "https://politicsandwar.com/alliance/id=1234", "aa:1234"})
+    @Binding(value = "A nation or alliance name, url or id. Prefix with `AA:` or `nation:` to avoid ambiguity if there exists both by the same name or id", examples = {"Borg", "https://trounced.net/alliance/DBK", "aa:1234"})
     public static KingdomOrAlliance nationOrAlliance(String input) {
         String lower = input.toLowerCase();
         if (lower.startsWith("aa:")) {

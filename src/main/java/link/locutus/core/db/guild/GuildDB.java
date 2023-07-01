@@ -70,14 +70,11 @@ public class GuildDB extends DBMain implements KingdomOrAllianceOrGuild {
     }
 
     private final Guild guild;
-
     private volatile IAutoRoleTask autoRoleTask;
     private GuildHandler handler;
-
     private Map<String, String> info;
     private final Map<GuildSetting, Object> infoParsed = new HashMap<>();
     private final Object nullInstance = new Object();
-
     private Map<String, Set<Long>> coalitions = null;
 
     private volatile boolean cachedRoleAliases = false;

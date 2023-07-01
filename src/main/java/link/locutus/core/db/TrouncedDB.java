@@ -60,6 +60,7 @@ import link.locutus.util.StringMan;
 import link.locutus.util.TimeUtil;
 import link.locutus.util.scheduler.ThrowingBiConsumer;
 import link.locutus.util.scheduler.ThrowingConsumer;
+import link.locutus.util.scheduler.ThrowingFunction;
 import net.dv8tion.jda.api.entities.User;
 
 import java.nio.charset.StandardCharsets;
@@ -86,7 +87,8 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class TrouncedDB extends DBMain {
-    private Map<Integer, Long> kingdomToUser = new ConcurrentHashMap<>();
+    private Map<Integer, Long> kingdomToUser2 = new ConcurrentHashMap<>();
+    private Map<Long, Set<Integer>> userToKindgom = new ConcurrentHashMap<>();
 
     Map<Integer, DBKingdom> kingdoms = new ConcurrentHashMap<>();
 
@@ -320,7 +322,8 @@ public class TrouncedDB extends DBMain {
             while (rs.next()) {
                 long discordId = rs.getLong("discord_id");
                 int kingdomId = rs.getInt("kingdom_id");
-                kingdomToUser.put(kingdomId, discordId);
+                kingdomToUser2.put(kingdomId, discordId);
+                userToKindgom.computeIfAbsent(discordId, k -> new HashSet<>()).add(kingdomId);
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -348,8 +351,9 @@ public class TrouncedDB extends DBMain {
                 int heroLevel = rs.getInt("hero_level");
                 long last_fetched = rs.getInt("last_fetched");
                 boolean is_fey = rs.getInt("is_fey") > 0;
+                long contribute_date = rs.getLong("contribute_date");
 
-                DBKingdom kingdom = new DBKingdom(id, realmId, allianceId, position, name, slug, totalLand, alertLevel, resourceLevel, spellAlert, lastActive, vacationStart, hero, heroLevel, last_fetched, is_fey);
+                DBKingdom kingdom = new DBKingdom(id, realmId, allianceId, position, name, slug, totalLand, alertLevel, resourceLevel, spellAlert, lastActive, vacationStart, hero, heroLevel, last_fetched, contribute_date, is_fey);
                 if (is_fey) {
                     feyKingdoms.put(id, kingdom);
                 } else {
@@ -461,8 +465,9 @@ public class TrouncedDB extends DBMain {
                 .putColumn("hero_level", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("last_fetched", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .putColumn("is_fey", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
+                .putColumn("contribute_date", ColumnType.BIGINT.struct().setNullAllowed(false).configure(f -> f.apply(null)))
                 .create(getDb());
-        // add column is_fey bigint
+        // add column contribute_date bigint
 
         // alliances
         TablePreset.create("ALLIANCES")
@@ -1029,17 +1034,15 @@ public class TrouncedDB extends DBMain {
     }
 
     public Long getUserIdFromKingdomId(int kingdom) {
-        return kingdomToUser.get(kingdom);
+        return kingdomToUser2.get(kingdom);
     }
 
     public Set<DBKingdom> getKingdomFromUser(long owner) {
         Set<DBKingdom> results = new LinkedHashSet<>();
-        for (Map.Entry<Integer, Long> entry : kingdomToUser.entrySet()) {
-            if (entry.getValue() == owner) {
-                DBKingdom kingdom = kingdoms.get(entry.getKey());
-                if (kingdom != null) {
-                    results.add(kingdom);
-                }
+        for (int kingdomId : userToKindgom.getOrDefault(owner, Collections.emptySet())) {
+            DBKingdom kingdom = kingdoms.get(kingdomId);
+            if (kingdom != null) {
+                results.add(kingdom);
             }
         }
         return results;
@@ -1229,12 +1232,13 @@ public class TrouncedDB extends DBMain {
             stmt.setInt(14, kingdom.getHero_level());
             stmt.setLong(15, kingdom.getLast_fetched());
             stmt.setLong(16, kingdom.isFey() ? 1 : 0);
+            stmt.setLong(17, kingdom.getContributeDate());
         }
     };
     public int[] saveKingdoms(List<DBKingdom> toSave) {
         int[] result;
-        String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched, is_fey) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String query = "INSERT OR REPLACE INTO KINGDOMS (id, realm_id, alliance_id, permission, name, slug, total_land, alert_level, resource_level, spell_alert, last_active, vacation_start, hero, hero_level, last_fetched, is_fey, contribute_date) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         if (toSave.size() == 1) {
             DBKingdom kingdom = toSave.iterator().next();
             result = new int[]{update(query, stmt -> setKingdom.accept(kingdom, stmt))};
@@ -1341,7 +1345,8 @@ public class TrouncedDB extends DBMain {
     }
 
     public void saveUser(long userId, DBKingdom kingdom) {
-        Long existing = kingdomToUser.put(kingdom.getId(), userId);
+        Long existing = kingdomToUser2.put(kingdom.getId(), userId);
+        userToKindgom.computeIfAbsent(userId, f -> new HashSet<>()).add(kingdom.getId());
         if (existing != null && existing.longValue() == userId) return;
         // save
         String query = "INSERT OR REPLACE INTO USERS (discord_id, kingdom_id) VALUES (?, ?)";
@@ -1352,7 +1357,12 @@ public class TrouncedDB extends DBMain {
     }
 
     public void unregister(long userId, DBKingdom kingdom) {
-        kingdomToUser.remove(kingdom.getId());
+        Long user = kingdomToUser2.remove(kingdom.getId());
+        if (user != null) {
+            Set<Integer> set = userToKindgom.get(user);
+            if (set != null) set.remove(kingdom.getId());
+        }
+
         String query = "DELETE FROM USERS WHERE discord_id = ? AND kingdom_id = ?";
         update(query, (ThrowingConsumer<PreparedStatement>) (stmt) -> {
             stmt.setLong(1, userId);

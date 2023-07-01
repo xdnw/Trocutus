@@ -88,11 +88,11 @@ public class TrounceUtil {
     }
 
     public static int getMaxScoreRange(int score, boolean declare) {
-        return (int) (score * 1.5);
+        return (int) (declare ? (score * 1.5) : (score / 0.66));
     }
 
     public static int getMinScoreRange(int score, boolean declare) {
-        return (int) (score * 0.75);
+        return (int) (declare ? (score * 0.66) : (score / 1.5));
     }
 
     public static String resourcesToString(Map<MilitaryUnit, ? extends Number> resources) {
@@ -155,7 +155,7 @@ public class TrounceUtil {
         double defenderRatio = (double) defenderAcres / attackerAcres;
         double loot = 0.1 * attackerAcres * Math.pow(defenderRatio, 2.2);
         if (isFey) loot = Math.min(loot, 1000);
-        return (int) Math.round(loot);
+        return (int) (Math.round(loot) * 0.5);
     }
 
     public static double getFeyLand(int attack) {
@@ -550,7 +550,7 @@ public class TrounceUtil {
     }
 
     public static double getTaxrate(int sender_score, int receiver_score) {
-        return Math.min(Math.max(Math.abs((sender_score - receiver_score) / (double) (sender_score + receiver_score)), 0.1), 0.8);
+        return Math.min(Math.max(Math.abs((sender_score - receiver_score) / (double) (sender_score + receiver_score)), 0.1), 1);
     }
 
     public static long applyTax(int sender_score, int receiver_score, long amount) {
@@ -559,6 +559,10 @@ public class TrounceUtil {
     }
 
     public static DBKingdom getNearestFey(int realmId, int land, int minScore, int maxScore, boolean fetch) {
+        List<DBKingdom> result = getNearestFey(realmId, land, minScore, maxScore, fetch, 1);
+        return result.isEmpty() ? null : result.get(0);
+    }
+    public static List<DBKingdom> getNearestFey(int realmId, int land, int minScore, int maxScore, boolean fetch, int amt) {
         if (fetch) {
             try {
                 Trocutus.imp().getScraper().fetchFey(PagePriority.FETCH_FEY_FG, realmId, land);
@@ -566,20 +570,14 @@ public class TrounceUtil {
                 e.printStackTrace();
             }
         }
-        Set<DBKingdom> inRange = Trocutus.imp().getDB().getFeyMatching(kingdom -> {
+        List<DBKingdom> inRange = new ArrayList<>(Trocutus.imp().getDB().getFeyMatching(kingdom -> {
             if (kingdom.getRealm_id() != realmId) return false;
             if (kingdom.getTotal_land() < minScore || kingdom.getTotal_land() > maxScore) return false;
             return true;
-        });
-        DBKingdom closest = null;
-        long closestDistance = Long.MAX_VALUE;
-        for (DBKingdom kingdom : inRange) {
-            long distance = Math.abs(kingdom.getTotal_land() - land);
-            if (distance < closestDistance) {
-                closest = kingdom;
-                closestDistance = distance;
-            }
-        }
-        return closest;
+        }));
+        // sort by distance to land
+        inRange.sort(Comparator.comparingLong(kingdom -> Math.abs(kingdom.getTotal_land() - land)));
+        // return first amt
+        return inRange.subList(0, Math.min(amt, inRange.size()));
     }
 }

@@ -267,6 +267,7 @@ public class CommandManager extends ListenerAdapter {
 
         this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "sync", "kingdom");
         this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncMetrics", "metrics");
+        this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncNonAuthInteractions", "non_auth_interactions");
         this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncInteractions", "interactions");
         this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAlliances", "alliances");
         this.commands.registerMethod(admin_commands, List.of("admin", "sync"), "syncAllianceKingdoms", "kingdoms_in_aa");
@@ -442,6 +443,10 @@ public class CommandManager extends ListenerAdapter {
             if (content.equalsIgnoreCase(Settings.INSTANCE.DISCORD.COMMAND.COMMAND_PREFIX + "threads")) {
                 threadDump();
                 return ;
+            }
+
+            if (!content.startsWith(Settings.INSTANCE.DISCORD.COMMAND.COMMAND_PREFIX)) {
+                return;
             }
 
             run(event, true);

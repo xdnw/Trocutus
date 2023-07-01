@@ -1,5 +1,8 @@
 package link.locutus.core.api.game;
 
+import link.locutus.core.db.entities.kingdom.DBKingdom;
+import link.locutus.core.db.entities.war.DBAttack;
+
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -135,6 +138,16 @@ public enum MilitaryUnit {
     public int getDefense(HeroType hero) {
         return defense;
     }
+
+//    public static Map.Entry<Map<MilitaryUnit, Long> , Map<MilitaryUnit, Long>> getUnits(DBAttack attack, boolean isAttacker) {
+//        DBKingdom attacker = attack.getAttacker();
+//        DBKingdom defender = attack.getDefender();
+//
+//        if (attacker != null && defender != null) {
+//
+//        }
+//    }
+
 
     public static Map.Entry<Map<MilitaryUnit, Long> , Map<MilitaryUnit, Long>> getUnits(Map<MilitaryUnit, Long> myCasualties, Map<MilitaryUnit, Long> opponentCasualties, HeroType myType, HeroType opponentType, boolean isAttack, boolean isVictory, boolean factorInLosses) {
         myCasualties = new EnumMap<>(myCasualties);

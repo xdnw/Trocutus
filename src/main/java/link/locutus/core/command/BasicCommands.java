@@ -290,12 +290,8 @@ public class BasicCommands {
         if (myKingdom == null) myKingdom = me.get(realm);
         if (myKingdom == null) return "You are not in a kingdom in this realm";
 
-        DBKingdom root = Trocutus.imp().rootAuth().getKingdom(realm.getId());
-        if (root == null) return "Could not find root kingdom";
-        if (root.getAlliance_id() != myKingdom.getAlliance_id()) return "You are not in the same alliance as " + root.getName() + " | " + root.getAllianceName();
-
         AllianceMembers.AllianceMember memberInfo = Trocutus.imp().getScraper().getAllianceMemberStrength(myKingdom.getRealm_id(), myKingdom.getId());
-        if (memberInfo == null) return "Could not find member info for " + myKingdom.getName();
+        if (memberInfo == null) return "Could not find member info for " + myKingdom.getName() + ". Member info requires authentication from a alliance admin: " + CM.credentials.login.cmd.toSlashMention();
 
         // -50% -> 50%
         int minScore = TrounceUtil.getMinScoreRange(memberInfo.land.total, true);
@@ -405,12 +401,8 @@ public class BasicCommands {
         DBKingdom myKingdom = me.get(realm);
         if (myKingdom == null) return "You are not in a kingdom in this realm";
 
-        DBKingdom root = Trocutus.imp().rootAuth().getKingdom(realm.getId());
-        if (root == null) return "Could not find root kingdom";
-        if (root.getAlliance_id() != myKingdom.getAlliance_id()) return "You are not in the same alliance as " + root.getName() + " | " + root.getAllianceName();
-
         AllianceMembers.AllianceMember memberInfo = Trocutus.imp().getScraper().getAllianceMemberStrength(myKingdom.getRealm_id(), myKingdom.getId());
-        if (memberInfo == null) return "Could not find member info for " + myKingdom.getName();
+        if (memberInfo == null) return "Could not find member info for " + myKingdom.getName() + ". Member info requires authentication from a alliance admin: " + CM.credentials.login.cmd.toSlashMention();
 
         int minScore = (int) (myKingdom.getAttackMinRange());
         int maxScore = (int) (myKingdom.getAttackMaxRange());

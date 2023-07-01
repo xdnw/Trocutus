@@ -227,7 +227,7 @@ public class StatCommands {
                 add(score, coal1StrSpread[(int) score], coal2StrSpread[(int) score]);
             }
         };
-        for (int score = (int) Math.max(10, minScore * 0.75 - 10); score < maxScore * 1.25 + 10; score++) {
+        for (int score = (int) Math.max(10, minScore * 0.66 - 10); score < maxScore * 1.6 + 10; score++) {
             table.add(score, (Void) null);
         }
         table.write(channel, false);
@@ -296,7 +296,7 @@ public class StatCommands {
                 add(score, coal1StrSpread[(int) score], coal2StrSpread[(int) score]);
             }
         };
-        for (int score = (int) Math.max(10, minScore * 0.75 - 10); score < maxScore * 1.25 + 10; score++) {
+        for (int score = (int) Math.max(10, minScore * 0.66 - 10); score < maxScore * 1.5 + 10; score++) {
             table.add(score, (Void) null);
         }
         table.write(channel, false);
@@ -326,15 +326,15 @@ public class StatCommands {
         double[] coal2StrSpread = new double[coal2Str.length];
 
         for (DBKingdom nation : coalition1) {
-            coal1Str[(int) (nation.getScore() * 0.75)] += 1;
+            coal1Str[(int) (nation.getScore() * 0.66)] += 1;
         }
         for (DBKingdom nation : coalition2) {
-            coal2Str[(int) (nation.getScore() * 0.75)] += 1;
+            coal2Str[(int) (nation.getScore() * 0.66)] += 1;
         }
         for (int min = 10; min < coal1Str.length; min++) {
             double val = coal1Str[min];
             if (val == 0) continue;
-            int max = Math.min(coal1StrSpread.length, (int) (1.75 * (min / 0.75)));
+            int max = Math.min(coal1StrSpread.length, (int) (1.5 * (min / 0.66)));
 
             for (int i = min; i < max; i++) {
                 coal1StrSpread[i] += val;
@@ -343,7 +343,7 @@ public class StatCommands {
         for (int min = 10; min < coal2Str.length; min++) {
             double val = coal2Str[min];
             if (val == 0) continue;
-            int max = Math.min(coal2StrSpread.length, (int) (1.75 * (min / 0.75)));
+            int max = Math.min(coal2StrSpread.length, (int) (1.5 * (min / 0.66)));
 
             for (int i = min; i < max; i++) {
                 coal2StrSpread[i] += val;
@@ -356,7 +356,7 @@ public class StatCommands {
                 add(score, coal1StrSpread[(int) score], coal2StrSpread[(int) score]);
             }
         };
-        for (int score = (int) Math.max(10, minScore * 0.75 - 10); score < maxScore * 1.25 + 10; score++) {
+        for (int score = (int) Math.max(10, minScore * 0.66 - 10); score < maxScore * 1.5 + 10; score++) {
             table.add(score, (Void) null);
         }
         table.write(channel, false);

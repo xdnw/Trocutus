@@ -2,6 +2,7 @@ package link.locutus.core.db.guild.interview;
 
 import link.locutus.core.api.alliance.Rank;
 import link.locutus.core.db.entities.alliance.AllianceList;
+import link.locutus.core.db.entities.alliance.DBAlliance;
 import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.kingdom.KingdomFilter;
 import link.locutus.core.db.guild.GuildDB;
@@ -190,6 +191,7 @@ public class IACheckup {
     public enum AuditType {
         CHECK_RANK("\uD83E\uDD47", AuditSeverity.WARNING),
         INACTIVE("\uD83D\uDCA4", AuditSeverity.DANGER),
+        CONTRIBUTE("\uD83D\uDCA4", AuditSeverity.DANGER),
         ;
 
         public final AuditType required;
@@ -224,8 +226,7 @@ public class IACheckup {
                 if (aaIds.isEmpty()) return null;
 
                 if (!aaIds.contains(nation.getAlliance_id())) {
-                    int id = aaIds.iterator().next();
-                    return new AbstractMap.SimpleEntry<>("APPLY", "Please apply to the alliance ingame: https://politicsandwar.com/alliance/join/id=" + id);
+                    return new AbstractMap.SimpleEntry<>("APPLY", "Please apply to the alliance ingame: " + nation.getAllianceUrl(nation.getSlug()));
                 }
                 if (nation.getPosition().ordinal() <= 1) {
                     return new AbstractMap.SimpleEntry<>("MEMBER", "Please discuss with your mentor about becoming a member");
@@ -233,12 +234,16 @@ public class IACheckup {
                 return null;
             }
             case INACTIVE:
-                return testIfCacheFails(() -> checkInactive(nation), updateKingdom);
+                return testIfCacheFails(() -> checkInactive(nation));
+            case CONTRIBUTE:
+                return checkContribute(nation, 24);
+//            case CONTRIBUTE_FULL:
+//                return checkContribute(nation, 30);
         }
         throw new IllegalArgumentException("Unsupported: " + type);
     }
 
-    private Map.Entry<Object, String> testIfCacheFails(Supplier<Map.Entry<Object, String>> supplier, boolean test) {
+    private Map.Entry<Object, String> testIfCacheFails(Supplier<Map.Entry<Object, String>> supplier) {
         return supplier.get();
     }
 
@@ -247,6 +252,19 @@ public class IACheckup {
         if (daysInactive > 1) {
             String message = "Hasn't logged in for " + daysInactive + " days.";
             return new AbstractMap.SimpleEntry<>(daysInactive, message);
+        }
+        return null;
+    }
+
+    private Map.Entry<Object, String> checkContribute(DBKingdom nation, int maxTurns) {
+        if (nation.getAlliance_id() > 0 && nation.getPosition().ordinal() > Rank.APPLICANT.ordinal()) {
+            long turnContributed = TimeUtil.getTurn(nation.getContributeDate());
+            long turnNow = TimeUtil.getTurn();
+            long turns = turnNow - turnContributed;
+            if (turns > maxTurns) {
+                String message = "Hasn't contributed for " + turns + " turns.";
+                return new AbstractMap.SimpleEntry<>(turns, message);
+            }
         }
         return null;
     }

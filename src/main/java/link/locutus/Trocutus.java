@@ -13,6 +13,7 @@ import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.kingdom.KingdomPlaceholders;
 import link.locutus.core.db.guild.GuildDB;
 import link.locutus.core.db.guild.GuildKey;
+import link.locutus.core.db.guild.role.IAutoRoleTask;
 import link.locutus.core.event.Event;
 import link.locutus.core.event.MainListener;
 import link.locutus.core.event.listener.AllianceListener;
@@ -28,12 +29,16 @@ import link.locutus.util.scheduler.ThrowingConsumer;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.events.guild.GuildJoinEvent;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.Compression;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
+import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayDeque;
@@ -277,6 +282,23 @@ public class Trocutus extends ListenerAdapter {
     public GuildDB getGuildDB(long guildId) {
         return getGuildDB(guildId, true);
     }
+
+    @Override
+    public void onGuildJoin(@Nonnull GuildJoinEvent event) {
+        manager.put(event.getGuild().getIdLong(), event.getJDA());
+    }
+
+    @Override
+    public void onGuildMemberJoin(@NotNull GuildMemberJoinEvent event) {
+        GuildDB db = getGuildDB(event.getGuild());
+        if (db != null) {
+            IAutoRoleTask task = db.getAutoRoleTask();
+            if (task != null) {
+                task.autoRole(event.getMember(), System.out::println);
+            }
+        }
+    }
+
     public GuildDB getGuildDB(long guildId, boolean cache) {
         if (cache) initGuildDB();
         GuildDB db = guildDatabases.get(guildId);

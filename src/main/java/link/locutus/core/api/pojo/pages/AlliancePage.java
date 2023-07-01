@@ -2,6 +2,7 @@ package link.locutus.core.api.pojo.pages;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import java.util.ArrayList;
 import java.util.Date;
 
 public class AlliancePage {
@@ -10,6 +11,13 @@ public class AlliancePage {
         public String name;
         public int level;
     }
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class DataPoint{
+        public int kingdom_id;
+        public int value;
+        public Date created_at;
+    }
+
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Kingdom {
@@ -31,6 +39,7 @@ public class AlliancePage {
         public String active;
         public Hero hero;
         public Boolean is_fey;
+        public ArrayList<DataPoint> data_points;
     }
 
 

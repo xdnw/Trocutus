@@ -266,7 +266,7 @@ public class TrouncedSlash extends SlashCommandManager {
 
             DiscordHookIO io = new DiscordHookIO(hook);
             Guild guild = event.isFromGuild() ? event.getGuild() : null;
-            Trocutus.imp().getCommandManager().run(guild, null, event.getUser(), null, io, path.replace("/", " "), combined, true);
+            Trocutus.imp().getCommandManager().run(guild, channel, event.getUser(), null, io, path.replace("/", " "), combined, true);
             long end = System.currentTimeMillis();
             if (end - start > 15) {
                 System.out.println("remove:||Slash command took " + (end - start) + "ms");

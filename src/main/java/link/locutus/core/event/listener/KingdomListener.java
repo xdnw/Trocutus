@@ -31,6 +31,7 @@ import link.locutus.util.MathMan;
 import link.locutus.util.RateLimitUtil;
 import link.locutus.util.StringMan;
 import link.locutus.util.TimeUtil;
+import link.locutus.util.TrounceUtil;
 import link.locutus.util.scheduler.CaughtRunnable;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.OnlineStatus;
@@ -182,8 +183,8 @@ public class KingdomListener {
 
         String title = StringMan.join(changes, " | ");
 
-        double minScore = current.getAttackMinRange();
-        double maxScore = current.getAttackMaxRange();
+        double minScore = TrounceUtil.getMinScoreRange(current.getScore(), false);
+        double maxScore = TrounceUtil.getMaxScoreRange(current.getScore(), false);
 
         AlertUtil.forEachChannel(GuildDB::isValidAlliance, GuildKey.ENEMY_ALERT_CHANNEL, new BiConsumer<MessageChannel, GuildDB>() {
             @Override

@@ -124,6 +124,7 @@ public class Placeholders<T> {
                 String part2 = input.substring(index + op.code.length());
 
                 Map.Entry<Type, Function<T, Object>> placeholder = getPlaceholderFunction(store, part1);
+                if (placeholder == null) throw new IllegalArgumentException("No placeholder found for `" + part1 + "`");
                 Function<T, Object> func = placeholder.getValue();
                 Type type = placeholder.getKey();
                 Predicate adapter;

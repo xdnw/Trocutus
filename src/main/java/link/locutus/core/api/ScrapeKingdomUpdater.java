@@ -23,6 +23,7 @@ import link.locutus.core.db.entities.kingdom.DBKingdom;
 import link.locutus.core.db.entities.alliance.DBRealm;
 import link.locutus.core.db.entities.spells.DBSpy;
 import link.locutus.core.db.entities.alliance.DBTreaty;
+import link.locutus.core.db.guild.GuildDB;
 import link.locutus.util.AlertUtil;
 import link.locutus.util.FileUtil;
 import link.locutus.util.PagePriority;
@@ -37,6 +38,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.io.IOException;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -137,18 +139,18 @@ public class ScrapeKingdomUpdater {
             @Override
             public void run() {
                 try {
-                    for (DBRealm realm : db.getRealms().values()) {
-                        boolean noAuth = true;
-                        for (DBAlliance alliance : realm.getAlliances()) {
-                            Auth auth = alliance.getAuth(Rank.ADMIN);
-                            if (auth == null) continue;
-                            fetchAllianceMemberStrength(auth, realm.getId());
-                            noAuth = false;
-                        }
-                        if (noAuth) {
-                            AlertUtil.error("No auth for realm " + realm.getId());
-                        }
-                    }
+                    syncNonAuthRegisteredGuildInteractions();
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 60000, TimeUnit.MINUTES.toMillis(15), TimeUnit.MILLISECONDS);
+
+        Trocutus.imp().getScheduler().scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    fetchAllAllianceStrength();
                 } catch (Throwable e) {
                     e.printStackTrace();
                 }
@@ -192,10 +194,38 @@ public class ScrapeKingdomUpdater {
         }, 60_000 * 60, TimeUnit.MINUTES.toMillis(120), TimeUnit.MILLISECONDS);
     }
 
+    public void syncNonAuthRegisteredGuildInteractions() {
+        for (GuildDB db : Trocutus.imp().getGuildDatabases().values()) {
+            for (DBAlliance alliance : db.getAlliances()) {
+                if (alliance.getKingdoms(true, 7200, true).isEmpty()) continue;
+                Auth auth = alliance.getAuth(Rank.ADMIN);
+                if (auth != null) continue;
+                for (DBKingdom kingdom : alliance.getKingdoms(true, 7200, true)) {
+                    updateKingdomInteractions(kingdom, 1, null);
+                }
+            }
+        }
+    }
+
+    public void fetchAllAllianceStrength() throws IOException {
+        for (DBRealm realm : db.getRealms().values()) {
+            boolean noAuth = true;
+            for (DBAlliance alliance : realm.getAlliances()) {
+                Auth auth = alliance.getAuth(Rank.ADMIN);
+                if (auth == null) continue;
+                fetchAllianceMemberStrength(auth, realm.getId());
+                noAuth = false;
+            }
+            if (noAuth) {
+                AlertUtil.error("No auth for realm " + realm.getId());
+            }
+        }
+    }
+
     public AllianceMembers.AllianceMember getAllianceMemberStrength(int realm_id, int kingdom_id) {
         if (allianceMembers.isEmpty()) {
             try {
-                fetchAllianceMemberStrength(rootAuth, realm_id);
+                fetchAllAllianceStrength();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -327,7 +357,7 @@ public class ScrapeKingdomUpdater {
 
         boolean modified = false;
         if (existing == null) {
-            existing = new DBKingdom(pojo.id, pojo.realm_id, pojo.alliance_id, Rank.NONE, null, null, 0, 0, 0, 0, 0, 0, null, 0, 0, pojo.is_fey == Boolean.TRUE);
+            existing = new DBKingdom(pojo.id, pojo.realm_id, pojo.alliance_id, Rank.NONE, null, null, 0, 0, 0, 0, 0, 0, null, 0, 0, 0, pojo.is_fey == Boolean.TRUE);
             modified = true;
         } else {
             makeCopy.accept(existing.getId(), existing.copy());
@@ -358,6 +388,15 @@ public class ScrapeKingdomUpdater {
             if (pojo.hero != null) {
                 modified |= existing.setHeroType(HeroType.valueOf(pojo.hero.name.toUpperCase()));
                 modified |= existing.setHeroLevel(pojo.hero.level);
+            }
+            if (pojo.data_points != null && !pojo.data_points.isEmpty()) {
+                long max = 0;
+                for (AlliancePage.DataPoint dataPoint : pojo.data_points) {
+                    if (dataPoint.created_at.getTime() > max) {
+                        max = dataPoint.created_at.getTime();
+                    }
+                }
+                modified |= existing.setContributeDate(max);
             }
             existing.setUpdated(System.currentTimeMillis());
         }
@@ -414,10 +453,7 @@ public class ScrapeKingdomUpdater {
 
     public CompletableFuture<DBKingdom> updateKingdom(PagePriority priority, int realm_id, String name) throws IOException {
         System.out.println("Updating kingdom " + name);
-        if (name.equalsIgnoreCase("vargstad")) {
-            new Exception().printStackTrace();
-        }
-        String slug = name.toLowerCase(Locale.ROOT).trim().replaceAll("[^a-z0-9_ -]", "").trim().replaceAll(" ", "-");
+        String slug = Normalizer.normalize(name, Normalizer.Form.NFD).toLowerCase(Locale.ROOT).trim().replaceAll("[^a-z0-9_ -]", "").trim().replaceAll(" ", "-");
 
         // remove non alphanumeric underscore
         String url = "https://trounced.net/kingdom/" + rootAuth.getKingdom(realm_id).getSlug() + "/search/" + slug;
@@ -431,7 +467,7 @@ public class ScrapeKingdomUpdater {
                         System.out.println("Deleting " + slug);
                         db.deleteKingdoms(kingdoms);
                     } else {
-                        System.out.println("Coud not find kingdom in db " + name + " | " + slug);
+                        System.out.println("Could not find kingdom in db " + name + " | " + slug);
                     }
                     return null;
                 } else {
@@ -635,7 +671,7 @@ public class ScrapeKingdomUpdater {
         // name-land-realm
         int realm = Integer.parseInt(split[split.length - 1]);
         int land = Integer.parseInt(split[split.length - 2]);
-        DBKingdom fey = new DBKingdom(id, realm, 0, Rank.NONE, name, slug, land, 0, 4, 0, 0, 0, HeroType.FEY, 0, 0, true);
+        DBKingdom fey = new DBKingdom(id, realm, 0, Rank.NONE, name, slug, land, 0, 4, 0, 0, 0, HeroType.FEY, 0, 0, 0, true);
         Trocutus.imp().getDB().saveKingdoms(Collections.emptyMap(), List.of(fey), false);
     }
 

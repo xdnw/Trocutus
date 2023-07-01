@@ -165,14 +165,14 @@ public class TrounceUtilCommands {
             response.append("Max land loot fey @" + MathMan.format(maxFeyScore) + " score. -> Strength: " + MathMan.format(TrounceUtil.getFeyDPA(maxFeyScore) * maxFeyScore));
         }
 
-        DBKingdom fey = TrounceUtil.getNearestFey(attacker.getRealm_id(), maxFeyScore, minScore, maxScore, updateFey);
-        if (fey != null) {
+        List<DBKingdom> nearest = TrounceUtil.getNearestFey(attacker.getRealm_id(), maxFeyScore, minScore, maxScore, updateFey, 5);
+        if (nearest != null && !nearest.isEmpty()) {
             response.append("\n**Found the following fey:**\n");
-            response.append("<" + fey.getUrl(attacker.getSlug()) + ">\n");
-            long strength = (long) (TrounceUtil.getFeyDPA(fey.getTotal_land()) * fey.getTotal_land());
-            response.append("- " + fey.getTotal_land() + " land | " + MathMan.format(strength) + " strength (approx.)\n");
+            for (DBKingdom fey : nearest) {
+                long strength = (long) (TrounceUtil.getFeyDPA(fey.getTotal_land()) * fey.getTotal_land());
+                response.append("- " + fey.getTotal_land() + " (" + MathMan.format(strength) + ") <" + fey.getUrl(attacker.getSlug()) + ">\n");
+            }
         }
-
 
         return response.toString();
     }

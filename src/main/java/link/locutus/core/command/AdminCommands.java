@@ -46,6 +46,13 @@ public class AdminCommands {
 
     @Command
     @RolePermission(value = Roles.ADMIN, root = true)
+    public String syncNonAuthInteractions() {
+        Trocutus.imp().getScraper().syncNonAuthRegisteredGuildInteractions();
+        return "Done!";
+    }
+
+    @Command
+    @RolePermission(value = Roles.ADMIN, root = true)
     public String dumpWiki(String pathRelative) throws IOException, InvocationTargetException, IllegalAccessException {
         CommandManager manager = Trocutus.imp().getCommandManager();
 

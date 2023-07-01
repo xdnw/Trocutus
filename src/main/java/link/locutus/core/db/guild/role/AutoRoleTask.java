@@ -81,12 +81,8 @@ public class AutoRoleTask implements IAutoRoleTask {
             setNickname(nickOpt);
         }
 
-        AutoRoleOption roleOpt = db.getOrNull(GuildKey.AUTOROLE);
-        if (roleOpt != null) {
-            try {
-                setAllianceMask(roleOpt);
-            } catch (IllegalArgumentException e) {}
-        }
+        setAllianceMask(db.getOrNull(GuildKey.AUTOROLE));
+
         initRegisteredRole = false;
         List<Role> roles = guild.getRoles();
         this.allianceRoles = new ConcurrentHashMap<>(DiscordUtil.getAARoles(roles));
@@ -394,7 +390,7 @@ public class AutoRoleTask implements IAutoRoleTask {
         User user = member.getUser();
         List<Role> roles = member.getRoles();
 
-        boolean isRegistered = registeredRole != null && roles.contains(registeredRole);
+        boolean isRegistered = !DBKingdom.getFromUser(user).isEmpty();
 
         Map<DBRealm, DBKingdom> kingdoms = DBKingdom.getFromUser(user);
 
@@ -416,8 +412,14 @@ public class AutoRoleTask implements IAutoRoleTask {
             autoRoleAllies(output, Collections.singleton(member));
         }
 
-        if (setAllianceMask != null && setAllianceMask != AutoRoleOption.FALSE) {
-            autoRoleAlliance(member, isRegistered, kingdoms, autoAll, output, tasks);
+        if (setAllianceMask != null) {
+            if (setAllianceMask != AutoRoleOption.FALSE) {
+                autoRoleAlliance(member, isRegistered, kingdoms, autoAll, output, tasks);
+            } else if (!autoAll) {
+                output.accept("Auto role alliance disabled because AUTOROLE is false");
+            }
+        } else if (!autoAll) {
+            output.accept("Auto role alliance disabled because AUTOROLE is not set");
         }
 
 
@@ -460,6 +462,18 @@ public class AutoRoleTask implements IAutoRoleTask {
                         .map(DBKingdom::getAlliance_id)
                         .filter(f -> f != 0 && allowedAAs.apply(f)).collect(Collectors.toSet());
 
+                if (alliancesToGrant.isEmpty() && !autoAll) {
+                    if (kingdoms.values().stream().allMatch(f -> f.getPosition().ordinal() < autoRoleRank.ordinal())) {
+                        output.accept("No alliance role granted because kingdom is not member");
+                    } else if (kingdoms.values().stream().allMatch(f -> f.getAlliance_id() == 0)) {
+                        output.accept("No alliance role granted because kingdom is not in an alliance");
+                    } else if (kingdoms.values().stream().allMatch(f -> !allowedAAs.apply(f.getAlliance_id()))) {
+                        output.accept("No alliance role granted because kingdom's alliance is not in coalition `masked_alliances`");
+                    } else {
+                        output.accept("No alliance role granted (multiple reasons)");
+                    }
+                }
+
                 if (!allianceRoles.isEmpty() && position == -1) {
                     position = allianceRoles.values().iterator().next().getPosition();
                 }
@@ -500,7 +514,14 @@ public class AutoRoleTask implements IAutoRoleTask {
                         output.accept("Add " + role.getName() + " to " + member.getEffectiveName());
                     tasks.accept(RateLimitUtil.queue(guild.addRoleToMember(member, role)));
                 }
-            } else isRegistered = false;
+            } else {
+                isRegistered = false;
+                if (!autoAll) {
+                    output.accept("No alliance role granted because user has no kingdoms");
+                }
+            }
+        } else if (!autoAll) {
+            output.accept("No alliance role granted because user is not registered");
         }
         if (!isRegistered && !autoAll) {
             Map<Integer, Role> memberAARoles = DiscordUtil.getAARoles(member.getRoles());
